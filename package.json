@@ -1,0 +1,50 @@
+{
+  "name": "cogmemai-mcp",
+  "version": "1.0.3",
+  "description": "CogmemAi — Cognitive Memory for Claude Code. Persistent memory across sessions for developers.",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "cogmemai-mcp": "build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "claude-code",
+    "cognitive-memory",
+    "ai-agent",
+    "persistent-memory",
+    "developer-tools",
+    "context",
+    "cogmemai"
+  ],
+  "author": "HiFriendbot (https://hifriendbot.com)",
+  "license": "MIT",
+  "homepage": "https://hifriendbot.com/developer/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hifriendbot/cogmemai-mcp"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
