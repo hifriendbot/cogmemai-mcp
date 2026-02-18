@@ -1,6 +1,7 @@
 {
   "name": "cogmemai-mcp",
-  "version": "1.0.3",
+  "version": "1.0.5",
+  "mcpName": "io.github.hifriendbot/cogmemai",
   "description": "CogmemAi — Cognitive Memory for Claude Code. Persistent memory across sessions for developers.",
   "type": "module",
   "main": "build/index.js",

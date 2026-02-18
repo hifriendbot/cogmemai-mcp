@@ -17,7 +17,7 @@ import { registerTools } from './tools.js';
 const server = new McpServer(
   {
     name: 'cogmemai',
-    version: '1.0.2',
+    version: '1.0.5',
   },
   {
     instructions: `You have persistent memory powered by CogmemAi. Use it proactively:

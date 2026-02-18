@@ -32,16 +32,21 @@ CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP 
 
 Sign up at [hifriendbot.com/developer](https://hifriendbot.com/developer/) and generate an API key.
 
-### 2. Add to Claude Code
+### 2. Install
 
-Add to your project's `.mcp.json` (or `~/.claude.json` for global):
+```bash
+npm install -g cogmemai-mcp
+```
+
+### 3. Add to Claude Code
+
+**Option A — Per project** (add `.mcp.json` to your project root):
 
 ```json
 {
   "mcpServers": {
-    "memory": {
-      "command": "npx",
-      "args": ["-y", "cogmemai-mcp"],
+    "cogmemai": {
+      "command": "cogmemai-mcp",
       "env": {
         "COGMEMAI_API_KEY": "cm_your_api_key_here"
       }
@@ -50,9 +55,15 @@ Add to your project's `.mcp.json` (or `~/.claude.json` for global):
 }
 ```
 
-### 3. Done
+**Option B — Global** (available in every project, no `.mcp.json` needed):
 
-Claude Code now has persistent memory. It will remember your architecture, preferences, and decisions across every session.
+```bash
+claude mcp add-json cogmemai '{"command":"cogmemai-mcp","env":{"COGMEMAI_API_KEY":"cm_your_api_key_here"}}' --scope user
+```
+
+### 4. Done
+
+Restart Claude Code. It now has persistent memory — it will remember your architecture, preferences, and decisions across every session. No prompting needed.
 
 ## Tools
 
