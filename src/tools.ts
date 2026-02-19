@@ -181,7 +181,7 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'get_project_context',
-    'Load all stored memories for the current project plus relevant global memories. Use at the start of a session to get full context from previous sessions.',
+    'Load top memories (by importance) for the current project plus relevant global memories. Use at the start of a session to get full context from previous sessions.',
     {
       project_id: z
         .string()
@@ -211,7 +211,7 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'list_memories',
-    'List all stored memories with optional filters by type, category, scope, or project.',
+    'List stored memories with optional filters by type, category, scope, or project.',
     {
       memory_type: z.enum(MEMORY_TYPES).optional().describe('Filter by type'),
       category: z.enum(CATEGORIES).optional().describe('Filter by category'),

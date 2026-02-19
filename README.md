@@ -74,8 +74,8 @@ CogmemAi provides 8 tools that Claude Code can use automatically:
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
-| `get_project_context` | Load all relevant memories at session start |
-| `list_memories` | Browse all memories with filters |
+| `get_project_context` | Load top memories (by importance) at session start |
+| `list_memories` | Browse memories with filters (paginated) |
 | `update_memory` | Update a memory's content, importance, or scope |
 | `delete_memory` | Permanently delete a memory |
 | `get_usage` | Check your usage stats and tier info |

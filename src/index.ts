@@ -17,13 +17,13 @@ import { registerTools } from './tools.js';
 const server = new McpServer(
   {
     name: 'cogmemai',
-    version: '1.0.5',
+    version: '1.0.6',
   },
   {
     instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
 
 ## On Session Start
-- Call get_project_context to load all memories from previous sessions for this project.
+- Call get_project_context to load your top memories (by importance) from previous sessions for this project.
 - Read the returned memories carefully — they contain architecture decisions, preferences, patterns, and context from past work.
 
 ## While Working
