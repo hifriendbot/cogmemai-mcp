@@ -16,8 +16,12 @@ CogmemAi gives Claude Code a real memory system:
 
 - **Semantic search** — finds relevant memories by meaning, not keywords
 - **Ai-powered extraction** — automatically identifies facts worth remembering from your conversations
+- **Smart deduplication** — detects duplicate and conflicting memories automatically
+- **Privacy controls** — auto-detects API keys, tokens, and secrets before storing
+- **Document ingestion** — feed in READMEs and docs to instantly build project context
 - **Project scoping** — memories tied to specific repos, plus global preferences that follow you everywhere
-- **Time-aware surfacing** — recent and important memories rank higher
+- **Smart context** — blends importance, semantic relevance, and recency for better retrieval
+- **Auto-reload after compaction** — survives Claude Code context compaction automatically
 - **Zero setup** — no databases, no Docker, no Python, no vector stores
 
 ## Why Not Local Memory?
@@ -67,18 +71,22 @@ Restart Claude Code. It now has persistent memory — it will remember your arch
 
 ## Tools
 
-CogmemAi provides 8 tools that Claude Code can use automatically:
+CogmemAi provides 12 tools that Claude Code can use automatically:
 
 | Tool | Description |
 |------|-------------|
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
-| `get_project_context` | Load top memories (by importance) at session start |
+| `get_project_context` | Load top memories at session start (with optional context for smart ranking) |
 | `list_memories` | Browse memories with filters (paginated) |
 | `update_memory` | Update a memory's content, importance, or scope |
 | `delete_memory` | Permanently delete a memory |
 | `get_usage` | Check your usage stats and tier info |
+| `export_memories` | Export all memories as JSON for backup or transfer |
+| `import_memories` | Bulk import memories from a JSON array |
+| `ingest_document` | Feed in a document (README, API docs) to auto-extract memories |
+| `save_session_summary` | Save a summary of what was accomplished in this session |
 
 ## Memory Types
 
@@ -103,7 +111,7 @@ Memories are categorized for better organization and retrieval:
 | | Free | Pro | Team | Enterprise |
 |---|---|---|---|---|
 | **Price** | $0 | $14.99/mo | $39.99/mo | $99.99/mo |
-| **Memories** | 50 | 2,000 | 10,000 | 50,000 |
+| **Memories** | 200 | 2,000 | 10,000 | 50,000 |
 | **Extractions/mo** | 100 | 2,000 | 5,000 | 20,000 |
 | **Projects** | 2 | 20 | 50 | 200 |
 

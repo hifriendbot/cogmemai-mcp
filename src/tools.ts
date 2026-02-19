@@ -1,5 +1,5 @@
 /**
- * CogmemAi MCP tool definitions — 8 tools for developer memory.
+ * CogmemAi MCP tool definitions — 12 tools for developer memory.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -32,7 +32,7 @@ const CATEGORIES = [
 ] as const;
 
 /**
- * Register all 8 CogmemAi tools on the MCP server.
+ * Register all 12 CogmemAi tools on the MCP server.
  */
 export function registerTools(server: McpServer): void {
   // ─── 1. save_memory ──────────────────────────────────────
@@ -47,10 +47,10 @@ export function registerTools(server: McpServer): void {
         .max(500)
         .describe('The fact to remember (complete sentence)'),
       memory_type: z
-        .enum(MEMORY_TYPES)
+        .string()
         .default('context')
         .describe(
-          'Type: identity, preference, architecture, decision, bug, dependency, pattern, context'
+          'Type: identity, preference, architecture, decision, bug, dependency, pattern, context. Custom types also accepted for non-developer domains.'
         ),
       category: z
         .enum(CATEGORIES)
@@ -181,7 +181,7 @@ export function registerTools(server: McpServer): void {
 
   server.tool(
     'get_project_context',
-    'Load top memories (by importance) for the current project plus relevant global memories. Use at the start of a session to get full context from previous sessions.',
+    'Load top memories for the current project plus relevant global memories. Use at the start of a session to get full context from previous sessions. Optionally pass context to get memories most relevant to your current task.',
     {
       project_id: z
         .string()
@@ -192,13 +192,20 @@ export function registerTools(server: McpServer): void {
         .boolean()
         .default(true)
         .describe('Include global developer preferences'),
+      context: z
+        .string()
+        .max(500)
+        .optional()
+        .describe('Optional context to improve relevance ranking (e.g., current task or topic)'),
     },
-    async ({ project_id, include_global }) => {
+    async ({ project_id, include_global, context }) => {
       const pid = project_id || detectProjectId();
-      const result = await api('/cogmemai/context', 'GET', {
+      const params: Record<string, string> = {
         project_id: pid,
         include_global: include_global ? 'true' : 'false',
-      });
+      };
+      if (context) params.context = context;
+      const result = await api('/cogmemai/context', 'GET', params);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify(result, null, 2) },
@@ -314,6 +321,128 @@ export function registerTools(server: McpServer): void {
     {},
     async () => {
       const result = await api('/cogmemai/usage', 'GET');
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 9. export_memories ─────────────────────────────────
+
+  server.tool(
+    'export_memories',
+    'Export all memories as JSON. Use this to back up memories or transfer them to another project.',
+    {},
+    async () => {
+      const projectId = detectProjectId();
+      const result = await api('/cogmemai/export', 'GET', {
+        project_id: projectId,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 10. import_memories ──────────────────────────────
+
+  server.tool(
+    'import_memories',
+    'Bulk import memories from a JSON array. Each memory needs at minimum a content field. Deduplication is applied automatically.',
+    {
+      memories: z
+        .string()
+        .min(2)
+        .max(100000)
+        .describe(
+          'JSON string containing an array of memory objects. Each must have "content", optionally: memory_type, category, subject, importance, scope.'
+        ),
+    },
+    async ({ memories }) => {
+      const projectId = detectProjectId();
+      let parsed;
+      try {
+        parsed = JSON.parse(memories);
+      } catch {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ error: 'Invalid JSON. Provide a JSON array of memory objects.' }),
+            },
+          ],
+        };
+      }
+      const result = await api('/cogmemai/import', 'POST', {
+        memories: parsed,
+        project_id: projectId,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 11. ingest_document ───────────────────────────────
+
+  server.tool(
+    'ingest_document',
+    'Extract memories from a document by splitting it into chunks and processing each one. Great for onboarding — feed in READMEs, architecture docs, or API specs to quickly build project context.',
+    {
+      text: z
+        .string()
+        .min(20)
+        .max(50000)
+        .describe('The document text to ingest (up to 50K characters)'),
+      document_type: z
+        .string()
+        .max(50)
+        .default('general')
+        .describe(
+          'Type hint for extraction (e.g., readme, api_docs, architecture, changelog)'
+        ),
+    },
+    async ({ text, document_type }) => {
+      const projectId = detectProjectId();
+      const result = await api('/cogmemai/ingest', 'POST', {
+        text,
+        document_type,
+        project_id: projectId,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 12. save_session_summary ──────────────────────────
+
+  server.tool(
+    'save_session_summary',
+    'Save a summary of the current coding session. Captures what was accomplished, decisions made, and next steps. Stored as a session_summary memory for future reference.',
+    {
+      summary: z
+        .string()
+        .min(10)
+        .max(2000)
+        .describe(
+          'Summary of the session — what was done, key decisions, and next steps'
+        ),
+    },
+    async ({ summary }) => {
+      const projectId = detectProjectId();
+      const result = await api('/cogmemai/session-summary', 'POST', {
+        summary,
+        project_id: projectId,
+      });
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify(result, null, 2) },
