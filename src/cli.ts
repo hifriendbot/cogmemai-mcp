@@ -16,7 +16,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 const API_BASE = 'https://hifriendbot.com/wp-json/hifriendbot/v1';
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 
 const FLAG_DIR = join(homedir(), '.cogmemai');
 
@@ -333,57 +333,154 @@ export async function runVerify(): Promise<void> {
 
 // ── Hook: PreCompact ─────────────────────────────────────────
 
+// Extract text from a message content field (string or content blocks array)
+function extractText(content: any): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text || '')
+      .join(' ');
+  }
+  return '';
+}
+
+// Extract file paths from tool_use blocks in a message
+function extractFilePaths(content: any): string[] {
+  if (!Array.isArray(content)) return [];
+  const files: string[] = [];
+  for (const block of content) {
+    if (block.type === 'tool_use' && block.input) {
+      if (block.input.file_path) files.push(block.input.file_path);
+      else if (block.input.path) files.push(block.input.path);
+    }
+  }
+  return files;
+}
+
+// Build a structured pre-compaction summary from the transcript
+// Claude Code transcript JSONL format: each line has { type, message: { role, content } }
+// type is "user"|"assistant"|"system"|"progress" etc.
+// message.content is a string (user) or array of content blocks (assistant)
+function buildCompactionSummary(transcriptPath: string, cwd: string): string {
+  const raw = readFileSync(transcriptPath, 'utf-8');
+  const lines = raw.trim().split('\n');
+
+  // Helper: get role and content from a transcript entry
+  const getMsg = (entry: any): { role: string; content: any } | null => {
+    if (entry.message?.role && entry.message?.content !== undefined) {
+      return { role: entry.message.role, content: entry.message.content };
+    }
+    // Fallback: direct role/content (e.g. other transcript formats)
+    if (entry.role && entry.content !== undefined) {
+      return { role: entry.role, content: entry.content };
+    }
+    return null;
+  };
+
+  // 1. Find the original task — first substantial user message
+  let mainTask = '';
+  for (let i = 0; i < Math.min(lines.length, 100); i++) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg && msg.role === 'user') {
+        const text = extractText(msg.content).trim();
+        if (text.length > 30) {
+          mainTask = text.length > 400 ? text.slice(0, 400) + '...' : text;
+          break;
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // 2. Find the most recent substantial user request
+  let lastRequest = '';
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 60); i--) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg && msg.role === 'user') {
+        const text = extractText(msg.content).trim();
+        // Skip trivial replies like "yes", "ok", "do it", etc.
+        if (text.length > 20) {
+          lastRequest = text.length > 400 ? text.slice(0, 400) + '...' : text;
+          break;
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // 3. Collect files worked on from tool_use blocks (last 150 lines)
+  const filesInvolved = new Set<string>();
+  for (let i = Math.max(0, lines.length - 150); i < lines.length; i++) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg) {
+        for (const f of extractFilePaths(msg.content)) {
+          filesInvolved.add(f);
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // 4. Get recent meaningful exchanges (last 40 lines, skip noise)
+  const recentExchanges: string[] = [];
+  for (let i = Math.max(0, lines.length - 40); i < lines.length; i++) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg && (msg.role === 'user' || msg.role === 'assistant')) {
+        const text = extractText(msg.content).trim();
+        if (text.length > 15) {
+          const truncated = text.length > 200 ? text.slice(0, 200) + '...' : text;
+          recentExchanges.push(`${msg.role}: ${truncated}`);
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // 5. Assemble structured summary
+  const parts: string[] = [];
+  parts.push(`Pre-compaction summary saved at ${new Date().toISOString()}`);
+  parts.push(`Working directory: ${cwd || 'unknown'}`);
+
+  if (mainTask) {
+    parts.push(`\nOriginal task: ${mainTask}`);
+  }
+
+  if (lastRequest && lastRequest !== mainTask) {
+    parts.push(`\nMost recent request: ${lastRequest}`);
+  }
+
+  if (filesInvolved.size > 0) {
+    const fileList = Array.from(filesInvolved).slice(0, 15).join(', ');
+    parts.push(`\nFiles worked on: ${fileList}`);
+  }
+
+  if (recentExchanges.length > 0) {
+    parts.push(`\nRecent conversation:\n${recentExchanges.slice(-8).join('\n')}`);
+  }
+
+  return parts.join('\n');
+}
+
 export async function runHookPrecompact(): Promise<void> {
   try {
     const apiKey = resolveApiKey();
     if (!apiKey) return;
 
     const hookInput = readHookInput();
-    const transcriptPath = hookInput.transcript_path;
-    const cwd = hookInput.cwd;
-    const sessionId = hookInput.session_id;
+    const { transcript_path, cwd, session_id } = hookInput;
 
-    // Build a summary from the transcript if available
+    // Build structured summary from the transcript
     let summary = '';
-    if (transcriptPath) {
+    if (transcript_path) {
       try {
-        const raw = readFileSync(transcriptPath, 'utf-8');
-        const lines = raw.trim().split('\n');
-        const recent: string[] = [];
-
-        // Extract last ~20 meaningful messages
-        for (let i = Math.max(0, lines.length - 40); i < lines.length; i++) {
-          try {
-            const entry = JSON.parse(lines[i]);
-            if (entry.role === 'user' || entry.role === 'assistant') {
-              const text =
-                typeof entry.content === 'string'
-                  ? entry.content
-                  : Array.isArray(entry.content)
-                    ? entry.content
-                        .filter((b: any) => b.type === 'text')
-                        .map((b: any) => b.text)
-                        .join(' ')
-                    : '';
-              if (text && text.length > 5) {
-                // Truncate long messages
-                recent.push(
-                  `${entry.role}: ${text.length > 200 ? text.slice(0, 200) + '...' : text}`
-                );
-              }
-            }
-          } catch {
-            // Skip unparseable lines
-          }
-        }
-
-        if (recent.length > 0) {
-          // Keep last 20
-          const last20 = recent.slice(-20);
-          summary = `Auto-saved before context compaction. Working directory: ${cwd || 'unknown'}. Recent conversation:\n${last20.join('\n')}`;
-        }
+        summary = buildCompactionSummary(transcript_path, cwd);
       } catch {
-        // Can't read transcript — save a minimal summary
+        // Can't read transcript — fall through to minimal summary
       }
     }
 
@@ -412,13 +509,13 @@ export async function runHookPrecompact(): Promise<void> {
 
     // Write session-specific flag file for context-reload hook
     mkdirSync(FLAG_DIR, { recursive: true });
-    const flag = flagPath(sessionId);
+    const flag = flagPath(session_id);
     writeFileSync(
       flag,
       JSON.stringify({
         timestamp: Math.floor(Date.now() / 1000),
         key_prefix: apiKey.slice(0, 8),
-        session_id: sessionId,
+        session_id,
       })
     );
   } catch {
