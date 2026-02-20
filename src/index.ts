@@ -6,21 +6,62 @@
  * Developers install with one command, set one env var, and Claude Code
  * remembers architecture, patterns, decisions, bugs, and preferences.
  *
- * Run: npx -y cogmemai-mcp
+ * Run: npx cogmemai-mcp setup
  * Docs: https://hifriendbot.com/developer/
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { registerTools } from './tools.js';
+import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload } from './cli.js';
 
-const server = new McpServer(
-  {
-    name: 'cogmemai',
-    version: '2.0.0',
-  },
-  {
-    instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
+// ── CLI routing ───────────────────────────────────────────────
+// Check if invoked with a subcommand (setup, verify, help).
+// If so, run the CLI flow. Otherwise, start the MCP server.
+
+const subcommand = process.argv[2]?.toLowerCase();
+
+if (subcommand === 'setup') {
+  const providedKey = process.argv[3];
+  runSetup(providedKey).catch((err) => {
+    console.error('Setup failed:', err.message || err);
+    process.exit(1);
+  });
+} else if (subcommand === 'hook') {
+  const hookName = process.argv[3]?.toLowerCase();
+  if (hookName === 'precompact') {
+    runHookPrecompact().catch(() => process.exit(0));
+  } else if (hookName === 'context-reload') {
+    runHookContextReload().catch(() => process.exit(0));
+  } else {
+    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload`);
+    process.exit(1);
+  }
+} else if (subcommand === 'verify') {
+  runVerify().catch((err) => {
+    console.error('Verify failed:', err.message || err);
+    process.exit(1);
+  });
+} else if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+  showHelp();
+} else if (subcommand === '--version' || subcommand === '-v' || subcommand === 'version') {
+  console.log('cogmemai-mcp 2.2.0');
+} else {
+  // Default: start MCP server
+  startMcpServer();
+}
+
+// ── MCP Server ────────────────────────────────────────────────
+
+async function startMcpServer() {
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
+  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
+  const { registerTools } = await import('./tools.js');
+
+  const server = new McpServer(
+    {
+      name: 'cogmemai',
+      version: '2.2.0',
+    },
+    {
+      instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
 
 ## CRITICAL: Always Have Context Loaded
 Before responding to any user message, verify you have CogmemAi project context
@@ -67,18 +108,12 @@ compaction or session restart. This is what makes you remember — never skip it
 - Use recall_memories when you need to look up something specific from past sessions.
 - Use ingest_document to quickly onboard from READMEs, architecture docs, or API specs.
 - Use export_memories to back up memories before major changes.`,
-  }
-);
+    }
+  );
 
-registerTools(server);
+  registerTools(server);
 
-async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('CogmemAi MCP server v2.0.0 running on stdio');
+  console.error('CogmemAi MCP server v2.2.0 running on stdio');
 }
-
-main().catch((err) => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});

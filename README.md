@@ -2,11 +2,17 @@
 
 **Claude Code forgets everything between sessions. CogmemAi fixes that.**
 
-One command. One env var. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
+One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
 
+## Quick Start
+
+```bash
+npx cogmemai-mcp setup
 ```
-npx -y cogmemai-mcp
-```
+
+That's it. The setup wizard verifies your API key, configures Claude Code, and you're ready. Start Claude Code by typing `claude` and your memories are ready.
+
+Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
 
 ## The Problem
 
@@ -30,19 +36,19 @@ Every local memory solution has the same problems: database corruption, memory l
 
 CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero crashes.**
 
-## Quick Start
-
-### 1. Get your API key
-
-Sign up at [hifriendbot.com/developer](https://hifriendbot.com/developer/) and generate an API key.
-
-### 2. Install
+## CLI Commands
 
 ```bash
-npm install -g cogmemai-mcp
+npx cogmemai-mcp setup          # Interactive setup wizard
+npx cogmemai-mcp setup <key>    # Setup with API key
+npx cogmemai-mcp verify         # Test connection and show usage
+npx cogmemai-mcp --version      # Show installed version
+npx cogmemai-mcp help           # Show all commands
 ```
 
-### 3. Add to Claude Code
+## Manual Setup
+
+If you prefer to configure manually instead of using `npx cogmemai-mcp setup`:
 
 **Option A — Per project** (add `.mcp.json` to your project root):
 
@@ -59,19 +65,27 @@ npm install -g cogmemai-mcp
 }
 ```
 
-**Option B — Global** (available in every project, no `.mcp.json` needed):
+**Option B — Global** (available in every project):
 
 ```bash
-claude mcp add-json cogmemai '{"command":"cogmemai-mcp","env":{"COGMEMAI_API_KEY":"cm_your_api_key_here"}}' --scope user
+claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here --scope user
 ```
 
-### 4. Done
+## Works With
 
-Restart Claude Code. It now has persistent memory — it will remember your architecture, preferences, and decisions across every session. No prompting needed.
+| Editor | Setup |
+|--------|-------|
+| **Claude Code** | `npx cogmemai-mcp setup` (automatic) |
+| **Cursor** | Add to `~/.cursor/mcp.json` |
+| **Windsurf** | Add to `~/.codeium/windsurf/mcp_config.json` |
+| **Cline** | VS Code settings → Cline MCP Servers |
+| **Continue** | Add to `~/.continue/config.yaml` |
+
+All editors use the same config format — see the [setup guides](https://hifriendbot.com/developer/) for each editor.
 
 ## Tools
 
-CogmemAi provides 12 tools that Claude Code can use automatically:
+CogmemAi provides 12 tools that Claude Code uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -87,6 +101,13 @@ CogmemAi provides 12 tools that Claude Code can use automatically:
 | `import_memories` | Bulk import memories from a JSON array |
 | `ingest_document` | Feed in a document (README, API docs) to auto-extract memories |
 | `save_session_summary` | Save a summary of what was accomplished in this session |
+
+## SDKs
+
+Build your own integrations with the CogmemAi API:
+
+- **JavaScript/TypeScript:** `npm install cogmemai-sdk` — [npm](https://www.npmjs.com/package/cogmemai-sdk) · [GitHub](https://github.com/hifriendbot/cogmemai-sdk)
+- **Python:** `pip install cogmemai` — [PyPI](https://pypi.org/project/cogmemai/) · [GitHub](https://github.com/hifriendbot/cogmemai-python)
 
 ## Memory Types
 
@@ -151,17 +172,6 @@ Your Terminal                          CogmemAi Cloud
 1. **Extraction** — When Claude Code works on your project, CogmemAi's Ai identifies important facts (architecture decisions, preferences, bugs) and stores them.
 2. **Embedding** — Each memory gets a semantic embedding vector for meaning-based search.
 3. **Surfacing** — When you start a new session, relevant memories are surfaced by meaning, importance, and recency.
-
-## Works Everywhere
-
-CogmemAi works in any terminal that runs Claude Code:
-
-- PowerShell
-- bash / zsh
-- Windows Terminal
-- macOS Terminal / iTerm2
-- VS Code terminal
-- Any SSH session
 
 ## Support
 
