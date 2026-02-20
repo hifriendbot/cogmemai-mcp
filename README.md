@@ -143,9 +143,9 @@ Memories are categorized for better organization and retrieval:
 | | Free | Pro | Team | Enterprise |
 |---|---|---|---|---|
 | **Price** | $0 | $14.99/mo | $39.99/mo | $99.99/mo |
-| **Memories** | 200 | 2,000 | 10,000 | 50,000 |
-| **Extractions/mo** | 100 | 2,000 | 5,000 | 20,000 |
-| **Projects** | 2 | 20 | 50 | 200 |
+| **Memories** | 1,000 | 2,000 | 10,000 | 50,000 |
+| **Extractions/mo** | 500 | 2,000 | 5,000 | 20,000 |
+| **Projects** | 5 | 20 | 50 | 200 |
 
 Start free. Upgrade when you need more.
 
