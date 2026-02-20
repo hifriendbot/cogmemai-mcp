@@ -36,6 +36,17 @@ Every local memory solution has the same problems: database corruption, memory l
 
 CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero crashes.**
 
+## Compaction Recovery
+
+When Claude Code compacts your context (auto or manual), conversation history gets compressed and context is lost. CogmemAi handles this automatically with two hooks:
+
+1. **PreCompact** — Before compaction, saves a session summary to the cloud
+2. **UserPromptSubmit** — On your next message after compaction, detects the compaction, fetches your project context from the API, and injects it directly into the conversation
+
+The result: seamless recovery. Claude responds with full context after compaction — no re-explaining, no manual prompting.
+
+The `npx cogmemai-mcp setup` command installs both hooks automatically into `~/.claude/settings.json`. Hooks are session-specific — multiple terminals won't interfere with each other.
+
 ## CLI Commands
 
 ```bash
