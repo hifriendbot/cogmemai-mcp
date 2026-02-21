@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hero.png" alt="CogmemAi — Why Claude Code Forgets Everything (And How to Fix It)" width="800">
+</p>
+
 # CogmemAi — Cognitive Memory for Claude Code
 
 **Claude Code forgets everything between sessions. CogmemAi fixes that.**
