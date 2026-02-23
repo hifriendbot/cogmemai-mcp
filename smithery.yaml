@@ -1,0 +1,18 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - cogmemaiApiKey
+    properties:
+      cogmemaiApiKey:
+        type: string
+        description: "Your CogmemAi API key (starts with cm_). Get one free at https://hifriendbot.com/developer/"
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'cogmemai-mcp'],
+      env: {
+        COGMEMAI_API_KEY: config.cogmemaiApiKey
+      }
+    })
