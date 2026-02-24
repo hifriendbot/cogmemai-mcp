@@ -1,0 +1,22 @@
+{
+  "name": "cogmemai-memory",
+  "owner": {
+    "name": "HiFriendbot",
+    "email": "support@hifriendbot.com"
+  },
+  "metadata": {
+    "description": "Persistent memory management for Ai coding assistants using CogmemAi",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "cogmemai-memory",
+      "description": "Teaches Claude best practices for memory management — when to save, importance scoring, memory types, and session workflows.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skill/cogmemai-memory"
+      ]
+    }
+  ]
+}
