@@ -1,5 +1,5 @@
 /**
- * CogmemAi MCP tool definitions — 12 tools for developer memory.
+ * CogmemAi MCP tool definitions — 18 tools for developer memory.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -16,19 +16,6 @@ const MEMORY_TYPES = [
   'dependency',
   'pattern',
   'context',
-] as const;
-
-const CATEGORIES = [
-  'frontend',
-  'backend',
-  'database',
-  'devops',
-  'testing',
-  'security',
-  'performance',
-  'tooling',
-  'api',
-  'general',
 ] as const;
 
 /**
@@ -53,10 +40,11 @@ export function registerTools(server: McpServer): void {
           'Type: identity, preference, architecture, decision, bug, dependency, pattern, context. Custom types also accepted for non-developer domains.'
         ),
       category: z
-        .enum(CATEGORIES)
+        .string()
+        .max(50)
         .default('general')
         .describe(
-          'Category: frontend, backend, database, devops, testing, security, performance, tooling, api, general'
+          'Category: frontend, backend, database, devops, testing, security, performance, tooling, api, general. Custom categories also accepted for non-developer domains.'
         ),
       subject: z
         .string()
@@ -78,10 +66,24 @@ export function registerTools(server: McpServer): void {
         .describe(
           'global = applies everywhere, project = specific to this codebase'
         ),
+      tags: z
+        .array(z.string().max(30))
+        .max(5)
+        .optional()
+        .describe(
+          'Optional tags for grouping/threading memories (max 5 tags, each max 30 chars). E.g., ["marketing-campaign", "feb-2026"]'
+        ),
+      ttl: z
+        .string()
+        .max(10)
+        .optional()
+        .describe(
+          'Set an expiration time. Use for temporary context like current task status. Format: "24h", "7d", "30d". Memory auto-archives after expiry.'
+        ),
     },
-    async ({ content, memory_type, category, subject, importance, scope }) => {
+    async ({ content, memory_type, category, subject, importance, scope, tags, ttl }) => {
       const projectId = detectProjectId();
-      const result = await api('/cogmemai/store', 'POST', {
+      const body: Record<string, unknown> = {
         content,
         memory_type,
         category,
@@ -89,7 +91,10 @@ export function registerTools(server: McpServer): void {
         importance,
         scope,
         project_id: projectId,
-      });
+      };
+      if (tags && tags.length > 0) body.tags = tags;
+      if (ttl) body.ttl = ttl;
+      const result = await api('/cogmemai/store', 'POST', body);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify(result, null, 2) },
@@ -121,14 +126,34 @@ export function registerTools(server: McpServer): void {
         .default(10)
         .describe('Max results'),
       memory_type: z.enum(MEMORY_TYPES).optional().describe('Filter by type'),
+      category: z
+        .string()
+        .max(50)
+        .optional()
+        .describe('Filter by category (e.g., "backend", "frontend", or any custom category)'),
+      importance_min: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .optional()
+        .describe('Only return memories with importance >= this value'),
+      tag: z
+        .string()
+        .max(30)
+        .optional()
+        .describe('Filter by tag (e.g., "marketing-campaign")'),
     },
-    async ({ query, scope, limit, memory_type }) => {
+    async ({ query, scope, limit, memory_type, category, importance_min, tag }) => {
       const projectId = detectProjectId();
       const result = await api('/cogmemai/recall', 'POST', {
         query,
         scope,
         limit,
         memory_type: memory_type || undefined,
+        category: category || undefined,
+        importance_min: importance_min || undefined,
+        tag: tag || undefined,
         project_id: projectId,
       });
       return {
@@ -197,14 +222,19 @@ export function registerTools(server: McpServer): void {
         .max(500)
         .optional()
         .describe('Optional context to improve relevance ranking (e.g., current task or topic)'),
+      context_type: z
+        .enum(['debugging', 'planning', 'reviewing', 'general'])
+        .optional()
+        .describe('Optional context type that shifts scoring weights. debugging = boost bug/pattern memories, planning = boost architecture/decision, reviewing = boost pattern/preference.'),
     },
-    async ({ project_id, include_global, context }) => {
+    async ({ project_id, include_global, context, context_type }) => {
       const pid = project_id || detectProjectId();
       const params: Record<string, string> = {
         project_id: pid,
         include_global: include_global ? 'true' : 'false',
       };
       if (context) params.context = context;
+      if (context_type) params.context_type = context_type;
       const result = await api('/cogmemai/context', 'GET', params);
       return {
         content: [
@@ -221,7 +251,18 @@ export function registerTools(server: McpServer): void {
     'List stored memories with optional filters by type, category, scope, or project.',
     {
       memory_type: z.enum(MEMORY_TYPES).optional().describe('Filter by type'),
-      category: z.enum(CATEGORIES).optional().describe('Filter by category'),
+      category: z
+        .string()
+        .max(50)
+        .optional()
+        .describe('Filter by category (e.g., "backend", "frontend", or any custom category)'),
+      importance_min: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .optional()
+        .describe('Only return memories with importance >= this value'),
       scope: z
         .enum(['global', 'project', 'all'])
         .default('all')
@@ -233,9 +274,14 @@ export function registerTools(server: McpServer): void {
         .max(100)
         .default(50)
         .describe('Results per page'),
+      tag: z
+        .string()
+        .max(30)
+        .optional()
+        .describe('Filter by tag (e.g., "marketing-campaign")'),
       offset: z.number().int().default(0).describe('Pagination offset'),
     },
-    async ({ memory_type, category, scope, limit, offset }) => {
+    async ({ memory_type, category, importance_min, scope, limit, tag, offset }) => {
       const projectId = detectProjectId();
       const params: Record<string, unknown> = {
         limit,
@@ -244,7 +290,9 @@ export function registerTools(server: McpServer): void {
       };
       if (memory_type) params.memory_type = memory_type;
       if (category) params.category = category;
+      if (importance_min) params.importance_min = importance_min;
       if (scope && scope !== 'all') params.scope = scope;
+      if (tag) params.tag = tag;
 
       const result = await api('/cogmemai/memories', 'GET', params);
       return {
@@ -443,6 +491,125 @@ export function registerTools(server: McpServer): void {
         summary,
         project_id: projectId,
       });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 13. list_tags ─────────────────────────────────────
+
+  server.tool(
+    'list_tags',
+    'List all tags in use across your memories, with counts. Use this to see what threads/groups exist and find related memories by tag.',
+    {},
+    async () => {
+      const projectId = detectProjectId();
+      const result = await api('/cogmemai/tags', 'GET', {
+        project_id: projectId,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 14. link_memories ─────────────────────────────────
+
+  server.tool(
+    'link_memories',
+    'Connect two related memories with a named relationship. Use this to build a knowledge graph — e.g., linking a bug fix to the architecture decision that caused it, or connecting a preference to the pattern it led to.',
+    {
+      memory_id: z.number().int().describe('The source memory ID'),
+      related_memory_id: z.number().int().describe('The target memory ID to link to'),
+      relationship: z
+        .enum(['led_to', 'contradicts', 'extends', 'related'])
+        .describe(
+          'How the memories relate: led_to (A caused B), contradicts (A conflicts with B), extends (A builds on B), related (general connection)'
+        ),
+    },
+    async ({ memory_id, related_memory_id, relationship }) => {
+      const result = await api(`/cogmemai/memory/${memory_id}/link`, 'POST', {
+        related_memory_id,
+        relationship,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 14. get_memory_links ─────────────────────────────
+
+  server.tool(
+    'get_memory_links',
+    'View all memories linked to a specific memory. Returns the relationship type and full memory details for each connection. Use this to explore the knowledge graph around a memory.',
+    {
+      memory_id: z.number().int().describe('The memory ID to get links for'),
+    },
+    async ({ memory_id }) => {
+      const result = await api(`/cogmemai/memory/${memory_id}/links`, 'GET');
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 15. get_memory_versions ──────────────────────────
+
+  server.tool(
+    'get_memory_versions',
+    'View the edit history of a memory. Shows all previous versions with timestamps and what changed. Useful for understanding how a decision or fact evolved over time.',
+    {
+      memory_id: z.number().int().describe('The memory ID to get version history for'),
+    },
+    async ({ memory_id }) => {
+      const result = await api(`/cogmemai/memory/${memory_id}/versions`, 'GET');
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 16. get_analytics ────────────────────────────────
+
+  server.tool(
+    'get_analytics',
+    'Get a memory health dashboard with insights: most recalled memories, never-recalled memories, stale memories, growth trends, and breakdowns by type and category. Use this to identify cleanup opportunities and understand memory usage patterns.',
+    {},
+    async () => {
+      const projectId = detectProjectId();
+      const result = await api('/cogmemai/analytics', 'GET', {
+        project_id: projectId,
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
+  );
+
+  // ─── 17. promote_memory ───────────────────────────────
+
+  server.tool(
+    'promote_memory',
+    'Promote a project-scoped memory to global scope so it applies across all projects. Use this when you discover a preference or pattern that should be universal — e.g., "user prefers tabs over spaces" or "always use Bun instead of npm".',
+    {
+      memory_id: z.number().int().describe('The project memory ID to promote to global scope'),
+    },
+    async ({ memory_id }) => {
+      const result = await api(`/cogmemai/memory/${memory_id}/promote`, 'POST');
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify(result, null, 2) },

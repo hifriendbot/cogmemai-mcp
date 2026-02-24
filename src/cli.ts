@@ -16,7 +16,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 const API_BASE = 'https://hifriendbot.com/wp-json/hifriendbot/v1';
-const VERSION = '2.2.1';
+const VERSION = '2.4.0';
 
 const FLAG_DIR = join(homedir(), '.cogmemai');
 
@@ -45,6 +45,12 @@ function flagPath(sessionId: string): string {
   // Sanitize session_id for filename safety
   const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   return join(FLAG_DIR, `compacted-${safe || 'unknown'}`);
+}
+
+// Session marker — tracks whether context was already injected for this session
+function sessionMarkerPath(sessionId: string): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+  return join(FLAG_DIR, `session-${safe || 'unknown'}`);
 }
 
 // ── Resolve API Key ──────────────────────────────────────────
@@ -277,6 +283,9 @@ export async function runSetup(providedKey?: string): Promise<void> {
     warn(`Could not install hooks: ${hookResult.error}`);
     log(`  ${DIM}CogmemAi will still work, but context won't auto-recover after compaction${RESET}`);
   }
+
+  // Step 5: Offer document ingestion to seed project memory
+  await offerDocumentIngest(apiKey);
 
   // Save version to memory
   await saveVersionMemory(apiKey);
@@ -518,6 +527,10 @@ export async function runHookPrecompact(): Promise<void> {
         session_id,
       })
     );
+
+    // Reset session marker so context-reload reinjects after compaction
+    const marker = sessionMarkerPath(session_id);
+    try { unlinkSync(marker); } catch {}
   } catch {
     // Never fail — don't block compaction
   }
@@ -527,35 +540,61 @@ export async function runHookPrecompact(): Promise<void> {
 
 export async function runHookContextReload(): Promise<void> {
   try {
-    // Read session_id from stdin to find the matching flag
     const hookInput = readHookInput();
     const sessionId = hookInput.session_id;
-    const flag_file = flagPath(sessionId);
+    const compactionFlag = flagPath(sessionId);
+    const marker = sessionMarkerPath(sessionId);
 
-    // Fast exit if no flag file for this session
-    if (!existsSync(flag_file)) return;
+    // Priority 1: Post-compaction reload (compaction flag exists)
+    const isPostCompaction = existsSync(compactionFlag);
+
+    // Priority 2: New session detection (no session marker, or marker expired)
+    let isNewSession = false;
+    if (!isPostCompaction) {
+      if (!existsSync(marker)) {
+        isNewSession = true;
+      } else {
+        // Check marker freshness — if > 4 hours, treat as new session
+        try {
+          const markerData = JSON.parse(readFileSync(marker, 'utf-8'));
+          const age = Math.floor(Date.now() / 1000) - markerData.timestamp;
+          if (age > 14400) isNewSession = true;
+        } catch {
+          isNewSession = true;
+        }
+      }
+    }
+
+    // Fast exit: not post-compaction AND not new session
+    if (!isPostCompaction && !isNewSession) {
+      // Opt-in recall hint for existing sessions
+      if (process.env.COGMEMAI_RECALL_HINT === '1' && existsSync(marker)) {
+        process.stdout.write(JSON.stringify({
+          additionalContext: 'CogmemAi: You have persistent memory. If this task involves past context, use recall_memories to search for relevant memories.',
+        }));
+      }
+      return;
+    }
 
     const apiKey = resolveApiKey();
     if (!apiKey) {
-      // No key — clean up flag and exit
-      try { unlinkSync(flag_file); } catch {}
+      if (isPostCompaction) try { unlinkSync(compactionFlag); } catch {}
       return;
     }
 
-    // Check flag freshness (< 1 hour)
-    let flagData: { timestamp: number; key_prefix: string; session_id: string };
-    try {
-      flagData = JSON.parse(readFileSync(flag_file, 'utf-8'));
-    } catch {
-      try { unlinkSync(flag_file); } catch {}
-      return;
-    }
-
-    const age = Math.floor(Date.now() / 1000) - flagData.timestamp;
-    if (age > 3600) {
-      // Stale flag — delete without action
-      try { unlinkSync(flag_file); } catch {}
-      return;
+    // Validate compaction flag freshness (< 1 hour)
+    if (isPostCompaction) {
+      try {
+        const flagData = JSON.parse(readFileSync(compactionFlag, 'utf-8'));
+        const age = Math.floor(Date.now() / 1000) - flagData.timestamp;
+        if (age > 3600) {
+          try { unlinkSync(compactionFlag); } catch {}
+          if (!isNewSession) return;
+        }
+      } catch {
+        try { unlinkSync(compactionFlag); } catch {}
+        if (!isNewSession) return;
+      }
     }
 
     // Fetch project context from API
@@ -566,13 +605,23 @@ export async function runHookContextReload(): Promise<void> {
       },
     });
 
-    // Delete flag regardless of API result
-    try { unlinkSync(flag_file); } catch {}
+    // Clean up compaction flag
+    if (isPostCompaction) {
+      try { unlinkSync(compactionFlag); } catch {}
+    }
+
+    // Write/update session marker so subsequent messages skip injection
+    mkdirSync(FLAG_DIR, { recursive: true });
+    writeFileSync(marker, JSON.stringify({
+      timestamp: Math.floor(Date.now() / 1000),
+      session_id: sessionId,
+    }));
 
     if (!res.ok) return;
 
     const data = await res.json() as {
       formatted_context?: string;
+      total_count?: number;
       project_memories?: Array<{ content: string; subject: string; importance: number }>;
       global_memories?: Array<{ content: string; subject: string; importance: number }>;
     };
@@ -582,7 +631,6 @@ export async function runHookContextReload(): Promise<void> {
     if (data.formatted_context) {
       context = data.formatted_context;
     } else {
-      // Fallback: build from raw memories
       const parts: string[] = [];
       if (data.project_memories) {
         for (const m of data.project_memories) {
@@ -597,15 +645,82 @@ export async function runHookContextReload(): Promise<void> {
       context = parts.join('\n');
     }
 
-    if (!context) return;
+    if (!context || (data.total_count !== undefined && data.total_count === 0)) return;
 
-    // Output as additionalContext JSON — Claude Code injects this into conversation
+    // Different label depending on trigger
+    const label = isPostCompaction
+      ? 'CogmemAi — Context recovered after compaction.'
+      : 'CogmemAi — Project context loaded from previous sessions.';
+
     const output = JSON.stringify({
-      additionalContext: `CogmemAi — Context recovered after compaction. Your memories have been reloaded:\n\n${context}`,
+      additionalContext: `${label} Your memories have been reloaded:\n\n${context}`,
     });
     process.stdout.write(output);
   } catch {
     // Never fail — don't break user's message flow
+  }
+}
+
+// ── Auto-Ingest Documents ────────────────────────────────────
+
+async function offerDocumentIngest(apiKey: string): Promise<void> {
+  const cwd = process.cwd();
+  const candidates: Array<{ path: string; name: string; type: string }> = [];
+
+  const claudeMd = join(cwd, 'CLAUDE.md');
+  if (existsSync(claudeMd)) {
+    candidates.push({ path: claudeMd, name: 'CLAUDE.md', type: 'architecture' });
+  }
+
+  const readmeMd = join(cwd, 'README.md');
+  const readmeLower = join(cwd, 'readme.md');
+  if (existsSync(readmeMd)) {
+    candidates.push({ path: readmeMd, name: 'README.md', type: 'readme' });
+  } else if (existsSync(readmeLower)) {
+    candidates.push({ path: readmeLower, name: 'readme.md', type: 'readme' });
+  }
+
+  if (candidates.length === 0) return;
+
+  log('');
+  log(`  ${BOLD}Step 5:${RESET} Seed project memory`);
+  log(`  ${DIM}Found ${candidates.map(c => c.name).join(' and ')} in current directory${RESET}`);
+
+  const answer = await prompt(`  Ingest to seed memory? (Y/n): `);
+  if (answer.toLowerCase() === 'n') {
+    log(`  ${DIM}Skipped. You can ingest later with the ingest_document tool.${RESET}`);
+    return;
+  }
+
+  for (const candidate of candidates) {
+    try {
+      let text = readFileSync(candidate.path, 'utf-8');
+      if (text.length > 50000) text = text.slice(0, 50000);
+      if (text.length < 20) {
+        log(`  ${DIM}${candidate.name} too short, skipping${RESET}`);
+        continue;
+      }
+
+      log(`  Ingesting ${candidate.name}...`);
+
+      const res = await fetch(`${API_BASE}/cogmemai/ingest`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, document_type: candidate.type }),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as { extracted?: number };
+        success(`${candidate.name}: ${data.extracted || 0} memories extracted`);
+      } else {
+        warn(`${candidate.name}: ingestion failed (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      warn(`${candidate.name}: ${err.message || 'read error'}`);
+    }
   }
 }
 

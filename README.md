@@ -88,19 +88,73 @@ claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here --
 
 ## Works With
 
-| Editor | Setup |
-|--------|-------|
-| **Claude Code** | `npx cogmemai-mcp setup` (automatic) |
-| **Cursor** | Add to `~/.cursor/mcp.json` |
-| **Windsurf** | Add to `~/.codeium/windsurf/mcp_config.json` |
-| **Cline** | VS Code settings → Cline MCP Servers |
-| **Continue** | Add to `~/.continue/config.yaml` |
+### Claude Code (Recommended)
 
-All editors use the same config format — see the [setup guides](https://hifriendbot.com/developer/) for each editor.
+Automatic setup:
+```bash
+npx cogmemai-mcp setup
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "cogmemai": {
+      "command": "npx",
+      "args": ["-y", "cogmemai-mcp"],
+      "env": { "COGMEMAI_API_KEY": "cm_your_api_key_here" }
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+```json
+{
+  "mcpServers": {
+    "cogmemai": {
+      "command": "npx",
+      "args": ["-y", "cogmemai-mcp"],
+      "env": { "COGMEMAI_API_KEY": "cm_your_api_key_here" }
+    }
+  }
+}
+```
+
+### Cline (VS Code)
+
+Open VS Code Settings > Cline > MCP Servers, add:
+```json
+{
+  "cogmemai": {
+    "command": "npx",
+    "args": ["-y", "cogmemai-mcp"],
+    "env": { "COGMEMAI_API_KEY": "cm_your_api_key_here" }
+  }
+}
+```
+
+### Continue
+
+Add to `~/.continue/config.yaml`:
+```yaml
+mcpServers:
+  - name: cogmemai
+    command: npx
+    args: ["-y", "cogmemai-mcp"]
+    env:
+      COGMEMAI_API_KEY: cm_your_api_key_here
+```
+
+Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
 
 ## Tools
 
-CogmemAi provides 12 tools that Claude Code uses automatically:
+CogmemAi provides 18 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|

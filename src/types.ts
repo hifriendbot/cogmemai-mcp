@@ -78,3 +78,45 @@ export interface UsageStats {
     last_used: string;
   }>;
 }
+
+export interface MemoryLink {
+  id: number;
+  memory_id: number;
+  related_memory_id: number;
+  relationship: 'led_to' | 'contradicts' | 'extends' | 'related';
+  created_at: string;
+  related_memory?: Memory;
+}
+
+export interface MemoryVersion {
+  id: number;
+  memory_id: number;
+  content: string;
+  importance: number;
+  scope: string;
+  changed_at: string;
+}
+
+export interface AnalyticsResult {
+  most_recalled: Memory[];
+  never_recalled: Memory[];
+  stale_memories: Memory[];
+  growth_trend: Array<{
+    date: string;
+    count: number;
+  }>;
+  by_type: Record<string, number>;
+  by_category: Record<string, number>;
+  total_memories: number;
+}
+
+export interface LinkResult {
+  success: boolean;
+  link_id: number;
+}
+
+export interface PromoteResult {
+  success: boolean;
+  memory_id: number;
+  new_scope: string;
+}
