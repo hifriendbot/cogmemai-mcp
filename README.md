@@ -55,11 +55,11 @@ The `npx cogmemai-mcp setup` command configures everything automatically.
 
 ## Skill
 
-CogmemAi includes a [Claude Skill](https://github.com/hifriendbot/cogmemai-mcp/tree/master/skill/cogmemai-memory) that teaches Claude best practices for memory management — when to save, importance scoring, memory types, and session workflows.
+CogmemAi includes a [Claude Skill](https://github.com/hifriendbot/cogmemai-mcp/tree/main/skill/cogmemai-memory) that teaches Claude best practices for memory management — when to save, importance scoring, memory types, and session workflows.
 
 **Claude Code:**
 ```
-/skill install https://github.com/hifriendbot/cogmemai-mcp/tree/master/skill/cogmemai-memory
+/skill install https://github.com/hifriendbot/cogmemai-mcp/tree/main/skill/cogmemai-memory
 ```
 
 **Claude.ai:** Upload the `skill/cogmemai-memory` folder in Settings > Skills.
