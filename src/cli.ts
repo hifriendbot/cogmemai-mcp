@@ -610,8 +610,9 @@ export async function runHookContextReload(): Promise<void> {
       }
     }
 
-    // Fetch project context from API
-    const res = await fetch(`${API_BASE}/cogmemai/context`, {
+    // Fetch project context from API (limit to 20 memories for hook injection)
+    const contextLimit = isPostCompaction ? 15 : 20;
+    const res = await fetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -659,6 +660,12 @@ export async function runHookContextReload(): Promise<void> {
     }
 
     if (!context || (data.total_count !== undefined && data.total_count === 0)) return;
+
+    // Cap context size to prevent bloating the conversation after compaction
+    const maxChars = isPostCompaction ? 4000 : 6000;
+    if (context.length > maxChars) {
+      context = context.slice(0, maxChars - 80) + '\n\n[Condensed — use recall_memories to search for specific past context]';
+    }
 
     // Different label depending on trigger
     const label = isPostCompaction

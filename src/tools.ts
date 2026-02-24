@@ -227,8 +227,19 @@ export function registerTools(server: McpServer): void {
         .enum(['debugging', 'planning', 'reviewing', 'general'])
         .optional()
         .describe('Optional context type that shifts scoring weights. debugging = boost bug/pattern memories, planning = boost architecture/decision, reviewing = boost pattern/preference.'),
+      compact: z
+        .boolean()
+        .default(true)
+        .describe('When true (default), returns only formatted_context text instead of full JSON arrays. Saves ~60% tokens.'),
+      limit: z
+        .number()
+        .int()
+        .min(5)
+        .max(100)
+        .default(25)
+        .describe('Max total memories to return (default 25). Lower values save context tokens.'),
     },
-    async ({ project_id, include_global, context, context_type }) => {
+    async ({ project_id, include_global, context, context_type, compact, limit }) => {
       const pid = project_id || detectProjectId();
       const params: Record<string, string> = {
         project_id: pid,
@@ -236,9 +247,18 @@ export function registerTools(server: McpServer): void {
       };
       if (context) params.context = context;
       if (context_type) params.context_type = context_type;
-      const result = await api('/cogmemai/context', 'GET', params);
+      if (limit) params.limit = String(limit);
+      const result = await api('/cogmemai/context', 'GET', params) as Record<string, unknown>;
       contextLoaded = true;
-      return wrapResult(result, true); // skip reminder — this IS the context load
+
+      if (compact) {
+        // Return only the formatted text — strips redundant JSON arrays (~60% token savings)
+        return wrapResult({
+          formatted_context: result.formatted_context || '',
+          total_count: result.total_count || 0,
+        }, true);
+      }
+      return wrapResult(result, true);
     }
   );
 
