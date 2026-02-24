@@ -53,6 +53,19 @@ When Claude Code compacts your context, conversation history gets compressed and
 
 The `npx cogmemai-mcp setup` command configures everything automatically.
 
+## Skill
+
+CogmemAi includes a [Claude Skill](https://github.com/hifriendbot/cogmemai-mcp/tree/main/skill/cogmemai-memory) that teaches Claude best practices for memory management — when to save, importance scoring, memory types, and session workflows.
+
+**Claude Code:**
+```
+/skill install https://github.com/hifriendbot/cogmemai-mcp/tree/main/skill/cogmemai-memory
+```
+
+**Claude.ai:** Upload the `skill/cogmemai-memory` folder in Settings > Skills.
+
+**Claude API:** Use the [Skills API](https://docs.claude.com/en/api/skills-guide) to attach the skill to your requests.
+
 ## CLI Commands
 
 ```bash
