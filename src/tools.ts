@@ -21,7 +21,7 @@ const MEMORY_TYPES = [
 // Session tracking: detect if get_project_context was called
 let contextLoaded = false;
 
-const CONTEXT_REMINDER = '\n\n⚠️ REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
+const CONTEXT_REMINDER = '\n\n[!] REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
 
 function wrapResult(result: unknown, skipReminder = false): { content: Array<{ type: 'text'; text: string }> } {
   let text = JSON.stringify(result, null, 2);
@@ -31,13 +31,14 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
   return { content: [{ type: 'text' as const, text }] };
 }
 
-function wrapError(error: unknown): { content: Array<{ type: 'text'; text: string }> } {
+function wrapError(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError: true } {
   const message = error instanceof Error ? error.message : String(error);
   return {
     content: [{
       type: 'text' as const,
       text: JSON.stringify({ error: message }),
     }],
+    isError: true,
   };
 }
 
@@ -581,7 +582,7 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // ─── 14. get_memory_links ─────────────────────────────
+  // ─── 15. get_memory_links ─────────────────────────────
 
   server.tool(
     'get_memory_links',

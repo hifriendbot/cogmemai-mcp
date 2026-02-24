@@ -1,6 +1,6 @@
 {
   "name": "cogmemai-mcp",
-  "version": "2.6.0",
+  "version": "2.7.2",
   "mcpName": "io.github.hifriendbot/cogmemai",
   "description": "CogmemAi — Cognitive Memory for Claude Code. Persistent memory across sessions for developers.",
   "type": "module",
@@ -35,7 +35,15 @@
     "context",
     "ai-agent",
     "developer-tools",
-    "cogmemai"
+    "cogmemai",
+    "cursor",
+    "windsurf",
+    "cline",
+    "continue",
+    "vscode",
+    "ide",
+    "ai-coding",
+    "code-assistant"
   ],
   "author": "HiFriendbot (https://hifriendbot.com)",
   "license": "MIT",

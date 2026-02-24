@@ -11,10 +11,10 @@
 
 import { createInterface } from 'readline';
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync, appendFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG } from './config.js';
+import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE } from './config.js';
 
 // Helper: read session_id from stdin hook input
 function readHookInput(): { session_id: string; transcript_path: string; cwd: string } {
@@ -70,6 +70,70 @@ function resolveApiKey(): string {
   }
 
   return '';
+}
+
+/**
+ * Fetch with timeout for hooks — never block Claude for more than HOOK_FETCH_TIMEOUT_MS.
+ */
+async function hookFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HOOK_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Clean up stale flag files in ~/.cogmemai/ older than STALE_FLAG_MAX_AGE.
+ * Runs opportunistically during hooks — never fails loudly.
+ */
+function cleanStaleFlagFiles(): void {
+  try {
+    const files = readdirSync(FLAG_DIR);
+    const now = Date.now();
+    for (const file of files) {
+      if (file === 'errors.log') continue; // Don't clean the error log
+      const filePath = join(FLAG_DIR, file);
+      try {
+        const stat = statSync(filePath);
+        if ((now - stat.mtimeMs) / 1000 > STALE_FLAG_MAX_AGE) {
+          unlinkSync(filePath);
+        }
+      } catch { /* skip files we can't stat */ }
+    }
+  } catch { /* non-critical */ }
+}
+
+/**
+ * Log hook errors to ~/.cogmemai/errors.log for debugging.
+ * Keeps last ~100KB to prevent unbounded growth.
+ */
+function logHookError(hookName: string, error: unknown): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    const logPath = join(FLAG_DIR, 'errors.log');
+    const timestamp = new Date().toISOString();
+    const message = error instanceof Error ? error.message : String(error);
+    const entry = `[${timestamp}] ${hookName}: ${message}\n`;
+
+    appendFileSync(logPath, entry);
+
+    // Trim if > 100KB
+    try {
+      const stat = statSync(logPath);
+      if (stat.size > 100 * 1024) {
+        const content = readFileSync(logPath, 'utf-8');
+        const lines = content.split('\n');
+        const trimmed = lines.slice(Math.floor(lines.length / 2)).join('\n');
+        writeFileSync(logPath, trimmed);
+      }
+    } catch { /* trim failure is non-critical */ }
+  } catch { /* logging failure is non-critical */ }
 }
 
 // ── Colors (ANSI) ─────────────────────────────────────────────
@@ -130,14 +194,14 @@ async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; data?: an
 
 async function saveVersionMemory(apiKey: string): Promise<void> {
   try {
-    await fetch(`${API_BASE}/cogmemai/store`, {
+    await hookFetch(`${API_BASE}/cogmemai/store`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        content: `CogmemAi MCP server v${VERSION} is installed. This is the latest version.`,
+        content: `CogmemAi MCP server v${VERSION} is installed with fetch timeouts, hook error logging, stale flag cleanup, and auto-session summaries.`,
         memory_type: 'dependency',
         category: 'tooling',
         subject: 'cogmemai_version',
@@ -510,9 +574,9 @@ export async function runHookPrecompact(): Promise<void> {
       summary = summary.slice(0, 1997) + '...';
     }
 
-    // Save session summary via API
+    // Save session summary via API (with timeout — never block compaction)
     try {
-      await fetch(`${API_BASE}/cogmemai/session-summary`, {
+      await hookFetch(`${API_BASE}/cogmemai/session-summary`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -526,6 +590,9 @@ export async function runHookPrecompact(): Promise<void> {
 
     // Write session-specific flag file for context-reload hook
     mkdirSync(FLAG_DIR, { recursive: true });
+
+    // Opportunistically clean up stale flag files
+    cleanStaleFlagFiles();
     const flag = flagPath(session_id);
     writeFileSync(
       flag,
@@ -539,7 +606,8 @@ export async function runHookPrecompact(): Promise<void> {
     // Reset session marker so context-reload reinjects after compaction
     const marker = sessionMarkerPath(session_id);
     try { unlinkSync(marker); } catch {}
-  } catch {
+  } catch (err) {
+    logHookError('precompact', err);
     // Never fail — don't block compaction
   }
 }
@@ -608,7 +676,7 @@ export async function runHookContextReload(): Promise<void> {
 
     // Fetch project context from API (limit to 20 memories for hook injection)
     const contextLimit = isPostCompaction ? 15 : 20;
-    const res = await fetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
+    const res = await hookFetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -678,7 +746,7 @@ export async function runHookContextReload(): Promise<void> {
     // Use console.log for reliable stdout flushing (adds newline, auto-flushes)
     console.log(output);
   } catch (err) {
-    // Log errors to stderr for debugging (never to stdout)
+    logHookError('context-reload', err);
     console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
@@ -858,7 +926,7 @@ export async function runHookStop(): Promise<void> {
 
     // Save via API (fire-and-forget — never block Claude from stopping)
     try {
-      await fetch(`${API_BASE}/cogmemai/session-summary`, {
+      await hookFetch(`${API_BASE}/cogmemai/session-summary`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -876,7 +944,8 @@ export async function runHookStop(): Promise<void> {
       timestamp: Math.floor(Date.now() / 1000),
       session_id: sessionId,
     }));
-  } catch {
+  } catch (err) {
+    logHookError('stop', err);
     // Never fail — don't interfere with Claude stopping
   }
 

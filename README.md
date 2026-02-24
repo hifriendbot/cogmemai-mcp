@@ -8,6 +8,14 @@
 
 One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
 
+## What's New in v2.7
+
+- **Faster, more reliable** — improved network handling with automatic retries and smart timeouts
+- **Better error reporting** — clearer error messages when something goes wrong
+- **Hook resilience** — compaction recovery and session hooks are more robust, with automatic cleanup
+- **Error logging** — hook issues are logged to `~/.cogmemai/errors.log` for easy debugging
+- **Works with more editors** — verified compatibility with Claude Code, Cursor, Windsurf, Cline, and Continue
+
 ## Quick Start
 
 ```bash

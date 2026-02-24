@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '2.6.0';
+export const VERSION = '2.7.2';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -18,6 +18,11 @@ export const FLAG_DIR = join(homedir(), '.cogmemai');
 // Session thresholds
 export const SESSION_EXPIRY_SECONDS = 14400; // 4 hours
 export const COMPACTION_FLAG_MAX_AGE = 3600;  // 1 hour
+
+// Network configuration
+export const FETCH_TIMEOUT_MS = 10000;       // 10s for MCP tool API calls
+export const HOOK_FETCH_TIMEOUT_MS = 5000;   // 5s for hook API calls (must not block Claude)
+export const STALE_FLAG_MAX_AGE = 86400;     // 24 hours — clean up old flag files
 
 // Retry configuration
 export const RETRY_CONFIG = {

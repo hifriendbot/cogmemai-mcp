@@ -1,8 +1,8 @@
 /**
- * CogmemAi API client — thin HTTP wrapper with retry logic.
+ * CogmemAi API client — thin HTTP wrapper with retry logic and timeouts.
  */
 
-import { API_BASE, API_KEY, VERSION, RETRY_CONFIG } from './config.js';
+import { API_BASE, API_KEY, VERSION, RETRY_CONFIG, FETCH_TIMEOUT_MS } from './config.js';
 
 if (!API_KEY) {
   console.error(
@@ -11,40 +11,54 @@ if (!API_KEY) {
 }
 
 /**
- * Fetch with exponential backoff retry for transient failures.
+ * Calculate exponential backoff delay with jitter.
+ */
+function retryDelay(attempt: number): number {
+  return Math.min(
+    RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt) + Math.random() * 200,
+    RETRY_CONFIG.maxDelayMs
+  );
+}
+
+/**
+ * Fetch with exponential backoff retry and request timeout.
  */
 async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  const retryable = RETRY_CONFIG.retryableStatusCodes as readonly number[];
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    // AbortController for per-request timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
 
       // Don't retry client errors (except retryable ones like 429)
-      const retryable = RETRY_CONFIG.retryableStatusCodes as readonly number[];
       if (res.ok || !retryable.includes(res.status)) {
         return res;
       }
 
       // Retryable server error — retry if attempts remain
       if (attempt < RETRY_CONFIG.maxRetries) {
-        const delay = Math.min(
-          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt) + Math.random() * 200,
-          RETRY_CONFIG.maxDelayMs
-        );
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, retryDelay(attempt)));
         continue;
       }
 
       return res; // Final attempt — return whatever we got
     } catch (err) {
+      clearTimeout(timeoutId);
       lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Make timeout errors more descriptive
+      if (lastError.name === 'AbortError') {
+        lastError = new Error(`Request timed out after ${FETCH_TIMEOUT_MS}ms`);
+      }
+
       if (attempt < RETRY_CONFIG.maxRetries) {
-        const delay = Math.min(
-          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt) + Math.random() * 200,
-          RETRY_CONFIG.maxDelayMs
-        );
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, retryDelay(attempt)));
         continue;
       }
     }
