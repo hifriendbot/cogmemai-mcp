@@ -1,17 +1,56 @@
 /**
- * CogmemAi API client — thin HTTP wrapper for the HiFriendbot REST API.
+ * CogmemAi API client — thin HTTP wrapper with retry logic.
  */
 
-const API_BASE =
-  process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
-  'https://hifriendbot.com/wp-json/hifriendbot/v1';
-
-const API_KEY = process.env.COGMEMAI_API_KEY || '';
+import { API_BASE, API_KEY, VERSION, RETRY_CONFIG } from './config.js';
 
 if (!API_KEY) {
   console.error(
     'Warning: COGMEMAI_API_KEY not set. Get your key at https://hifriendbot.com/developer/'
   );
+}
+
+/**
+ * Fetch with exponential backoff retry for transient failures.
+ */
+async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+
+      // Don't retry client errors (except retryable ones like 429)
+      const retryable = RETRY_CONFIG.retryableStatusCodes as readonly number[];
+      if (res.ok || !retryable.includes(res.status)) {
+        return res;
+      }
+
+      // Retryable server error — retry if attempts remain
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt) + Math.random() * 200,
+          RETRY_CONFIG.maxDelayMs
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      return res; // Final attempt — return whatever we got
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt) + Math.random() * 200,
+          RETRY_CONFIG.maxDelayMs
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+    }
+  }
+
+  throw lastError || new Error('Request failed after retries');
 }
 
 /**
@@ -26,7 +65,7 @@ export async function api(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'User-Agent': 'CogmemAi-MCP/1.0',
+    'User-Agent': `CogmemAi-MCP/${VERSION}`,
   };
 
   if (API_KEY) {
@@ -51,7 +90,7 @@ export async function api(
     if (qs) {
       const separator = url.includes('?') ? '&' : '?';
       const fullUrl = `${url}${separator}${qs}`;
-      const res = await fetch(fullUrl, { method, headers });
+      const res = await fetchWithRetry(fullUrl, { method, headers });
       const data = await res.json();
       if (!res.ok) {
         const error =
@@ -62,7 +101,7 @@ export async function api(
     }
   }
 
-  const res = await fetch(url, options);
+  const res = await fetchWithRetry(url, options);
   const data = await res.json();
 
   if (!res.ok) {

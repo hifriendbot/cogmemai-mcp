@@ -31,6 +31,16 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
   return { content: [{ type: 'text' as const, text }] };
 }
 
+function wrapError(error: unknown): { content: Array<{ type: 'text'; text: string }> } {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify({ error: message }),
+    }],
+  };
+}
+
 /**
  * Register all CogmemAi tools on the MCP server.
  */
@@ -95,20 +105,24 @@ export function registerTools(server: McpServer): void {
         ),
     },
     async ({ content, memory_type, category, subject, importance, scope, tags, ttl }) => {
-      const projectId = detectProjectId();
-      const body: Record<string, unknown> = {
-        content,
-        memory_type,
-        category,
-        subject,
-        importance,
-        scope,
-        project_id: projectId,
-      };
-      if (tags && tags.length > 0) body.tags = tags;
-      if (ttl) body.ttl = ttl;
-      const result = await api('/cogmemai/store', 'POST', body);
-      return wrapResult(result);
+      try {
+        const projectId = detectProjectId();
+        const body: Record<string, unknown> = {
+          content,
+          memory_type,
+          category,
+          subject,
+          importance,
+          scope,
+          project_id: projectId,
+        };
+        if (tags && tags.length > 0) body.tags = tags;
+        if (ttl) body.ttl = ttl;
+        const result = await api('/cogmemai/store', 'POST', body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -154,18 +168,22 @@ export function registerTools(server: McpServer): void {
         .describe('Filter by tag (e.g., "marketing-campaign")'),
     },
     async ({ query, scope, limit, memory_type, category, importance_min, tag }) => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/recall', 'POST', {
-        query,
-        scope,
-        limit,
-        memory_type: memory_type || undefined,
-        category: category || undefined,
-        importance_min: importance_min || undefined,
-        tag: tag || undefined,
-        project_id: projectId,
-      });
-      return wrapResult(result);
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/recall', 'POST', {
+          query,
+          scope,
+          limit,
+          memory_type: memory_type || undefined,
+          category: category || undefined,
+          importance_min: importance_min || undefined,
+          tag: tag || undefined,
+          project_id: projectId,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -192,14 +210,18 @@ export function registerTools(server: McpServer): void {
         .describe('Previous exchange for context'),
     },
     async ({ user_message, assistant_response, previous_context }) => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/extract', 'POST', {
-        user_message,
-        assistant_response: assistant_response || '',
-        previous_context: previous_context || '',
-        project_id: projectId,
-      });
-      return wrapResult(result);
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/extract', 'POST', {
+          user_message,
+          assistant_response: assistant_response || '',
+          previous_context: previous_context || '',
+          project_id: projectId,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -240,25 +262,28 @@ export function registerTools(server: McpServer): void {
         .describe('Max total memories to return (default 25). Lower values save context tokens.'),
     },
     async ({ project_id, include_global, context, context_type, compact, limit }) => {
-      const pid = project_id || detectProjectId();
-      const params: Record<string, string> = {
-        project_id: pid,
-        include_global: include_global ? 'true' : 'false',
-      };
-      if (context) params.context = context;
-      if (context_type) params.context_type = context_type;
-      if (limit) params.limit = String(limit);
-      const result = await api('/cogmemai/context', 'GET', params) as Record<string, unknown>;
-      contextLoaded = true;
+      try {
+        const pid = project_id || detectProjectId();
+        const params: Record<string, string> = {
+          project_id: pid,
+          include_global: include_global ? 'true' : 'false',
+        };
+        if (context) params.context = context;
+        if (context_type) params.context_type = context_type;
+        if (limit) params.limit = String(limit);
+        const result = await api('/cogmemai/context', 'GET', params) as Record<string, unknown>;
+        contextLoaded = true;
 
-      if (compact) {
-        // Return only the formatted text — strips redundant JSON arrays (~60% token savings)
-        return wrapResult({
-          formatted_context: result.formatted_context || '',
-          total_count: result.total_count || 0,
-        }, true);
+        if (compact) {
+          return wrapResult({
+            formatted_context: result.formatted_context || '',
+            total_count: result.total_count || 0,
+          }, true);
+        }
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
       }
-      return wrapResult(result, true);
     }
   );
 
@@ -300,20 +325,24 @@ export function registerTools(server: McpServer): void {
       offset: z.number().int().default(0).describe('Pagination offset'),
     },
     async ({ memory_type, category, importance_min, scope, limit, tag, offset }) => {
-      const projectId = detectProjectId();
-      const params: Record<string, unknown> = {
-        limit,
-        offset,
-        project_id: projectId,
-      };
-      if (memory_type) params.memory_type = memory_type;
-      if (category) params.category = category;
-      if (importance_min) params.importance_min = importance_min;
-      if (scope && scope !== 'all') params.scope = scope;
-      if (tag) params.tag = tag;
+      try {
+        const projectId = detectProjectId();
+        const params: Record<string, unknown> = {
+          limit,
+          offset,
+          project_id: projectId,
+        };
+        if (memory_type) params.memory_type = memory_type;
+        if (category) params.category = category;
+        if (importance_min) params.importance_min = importance_min;
+        if (scope && scope !== 'all') params.scope = scope;
+        if (tag) params.tag = tag;
 
-      const result = await api('/cogmemai/memories', 'GET', params);
-      return wrapResult(result);
+        const result = await api('/cogmemai/memories', 'GET', params);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -326,8 +355,12 @@ export function registerTools(server: McpServer): void {
       memory_id: z.number().int().describe('Memory ID to delete'),
     },
     async ({ memory_id }) => {
-      const result = await api(`/cogmemai/memory/${memory_id}`, 'DELETE');
-      return wrapResult(result);
+      try {
+        const result = await api(`/cogmemai/memory/${memory_id}`, 'DELETE');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -357,13 +390,17 @@ export function registerTools(server: McpServer): void {
         .describe('New scope'),
     },
     async ({ memory_id, content, importance, scope }) => {
-      const body: Record<string, unknown> = {};
-      if (content !== undefined) body.content = content;
-      if (importance !== undefined) body.importance = importance;
-      if (scope !== undefined) body.scope = scope;
+      try {
+        const body: Record<string, unknown> = {};
+        if (content !== undefined) body.content = content;
+        if (importance !== undefined) body.importance = importance;
+        if (scope !== undefined) body.scope = scope;
 
-      const result = await api(`/cogmemai/memory/${memory_id}`, 'PATCH', body);
-      return wrapResult(result);
+        const result = await api(`/cogmemai/memory/${memory_id}`, 'PATCH', body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -374,8 +411,12 @@ export function registerTools(server: McpServer): void {
     'Get current usage statistics — memory count, extractions this month, tier info, projects.',
     {},
     async () => {
-      const result = await api('/cogmemai/usage', 'GET');
-      return wrapResult(result);
+      try {
+        const result = await api('/cogmemai/usage', 'GET');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -386,11 +427,15 @@ export function registerTools(server: McpServer): void {
     'Export all memories as JSON. Use this to back up memories or transfer them to another project.',
     {},
     async () => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/export', 'GET', {
-        project_id: projectId,
-      });
-      return wrapResult(result, true); // export is intentional, skip reminder
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/export', 'GET', {
+          project_id: projectId,
+        });
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -409,25 +454,22 @@ export function registerTools(server: McpServer): void {
         ),
     },
     async ({ memories }) => {
-      const projectId = detectProjectId();
-      let parsed;
       try {
-        parsed = JSON.parse(memories);
-      } catch {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ error: 'Invalid JSON. Provide a JSON array of memory objects.' }),
-            },
-          ],
-        };
+        const projectId = detectProjectId();
+        let parsed;
+        try {
+          parsed = JSON.parse(memories);
+        } catch {
+          return wrapError(new Error('Invalid JSON. Provide a JSON array of memory objects.'));
+        }
+        const result = await api('/cogmemai/import', 'POST', {
+          memories: parsed,
+          project_id: projectId,
+        });
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
       }
-      const result = await api('/cogmemai/import', 'POST', {
-        memories: parsed,
-        project_id: projectId,
-      });
-      return wrapResult(result, true); // import is intentional, skip reminder
     }
   );
 
@@ -451,13 +493,17 @@ export function registerTools(server: McpServer): void {
         ),
     },
     async ({ text, document_type }) => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/ingest', 'POST', {
-        text,
-        document_type,
-        project_id: projectId,
-      });
-      return wrapResult(result, true); // ingest is intentional, skip reminder
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/ingest', 'POST', {
+          text,
+          document_type,
+          project_id: projectId,
+        });
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -476,12 +522,16 @@ export function registerTools(server: McpServer): void {
         ),
     },
     async ({ summary }) => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/session-summary', 'POST', {
-        summary,
-        project_id: projectId,
-      });
-      return wrapResult(result, true); // session summary at end, skip reminder
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/session-summary', 'POST', {
+          summary,
+          project_id: projectId,
+        });
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -492,11 +542,15 @@ export function registerTools(server: McpServer): void {
     'List all tags in use across your memories, with counts. Use this to see what threads/groups exist and find related memories by tag.',
     {},
     async () => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/tags', 'GET', {
-        project_id: projectId,
-      });
-      return wrapResult(result);
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/tags', 'GET', {
+          project_id: projectId,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -515,11 +569,15 @@ export function registerTools(server: McpServer): void {
         ),
     },
     async ({ memory_id, related_memory_id, relationship }) => {
-      const result = await api(`/cogmemai/memory/${memory_id}/link`, 'POST', {
-        related_memory_id,
-        relationship,
-      });
-      return wrapResult(result);
+      try {
+        const result = await api(`/cogmemai/memory/${memory_id}/link`, 'POST', {
+          related_memory_id,
+          relationship,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -532,8 +590,12 @@ export function registerTools(server: McpServer): void {
       memory_id: z.number().int().describe('The memory ID to get links for'),
     },
     async ({ memory_id }) => {
-      const result = await api(`/cogmemai/memory/${memory_id}/links`, 'GET');
-      return wrapResult(result);
+      try {
+        const result = await api(`/cogmemai/memory/${memory_id}/links`, 'GET');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -546,8 +608,12 @@ export function registerTools(server: McpServer): void {
       memory_id: z.number().int().describe('The memory ID to get version history for'),
     },
     async ({ memory_id }) => {
-      const result = await api(`/cogmemai/memory/${memory_id}/versions`, 'GET');
-      return wrapResult(result);
+      try {
+        const result = await api(`/cogmemai/memory/${memory_id}/versions`, 'GET');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -558,11 +624,15 @@ export function registerTools(server: McpServer): void {
     'Get a memory health dashboard with insights: most recalled memories, never-recalled memories, stale memories, growth trends, and breakdowns by type and category. Use this to identify cleanup opportunities and understand memory usage patterns.',
     {},
     async () => {
-      const projectId = detectProjectId();
-      const result = await api('/cogmemai/analytics', 'GET', {
-        project_id: projectId,
-      });
-      return wrapResult(result);
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/analytics', 'GET', {
+          project_id: projectId,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 
@@ -575,8 +645,12 @@ export function registerTools(server: McpServer): void {
       memory_id: z.number().int().describe('The project memory ID to promote to global scope'),
     },
     async ({ memory_id }) => {
-      const result = await api(`/cogmemai/memory/${memory_id}/promote`, 'POST');
-      return wrapResult(result);
+      try {
+        const result = await api(`/cogmemai/memory/${memory_id}/promote`, 'POST');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
     }
   );
 }

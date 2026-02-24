@@ -14,11 +14,7 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-
-const API_BASE = 'https://hifriendbot.com/wp-json/hifriendbot/v1';
-const VERSION = '2.5.0';
-
-const FLAG_DIR = join(homedir(), '.cogmemai');
+import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG } from './config.js';
 
 // Helper: read session_id from stdin hook input
 function readHookInput(): { session_id: string; transcript_path: string; cwd: string } {
@@ -277,11 +273,11 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
   const hookResult = configureHooks();
   if (hookResult.success) {
-    success('Compaction recovery hooks installed');
-    log(`  ${DIM}Context auto-saves before compaction and reloads after${RESET}`);
+    success('Hooks installed (compaction recovery + auto-session-summary)');
+    log(`  ${DIM}Context auto-saves before compaction, reloads after, and sessions save automatically${RESET}`);
   } else {
     warn(`Could not install hooks: ${hookResult.error}`);
-    log(`  ${DIM}CogmemAi will still work, but context won't auto-recover after compaction${RESET}`);
+    log(`  ${DIM}CogmemAi will still work, but auto-recovery and auto-summary won't be active${RESET}`);
   }
 
   // Step 5: Configure auto-memory loading via CLAUDE.md
@@ -570,7 +566,7 @@ export async function runHookContextReload(): Promise<void> {
         try {
           const markerData = JSON.parse(readFileSync(marker, 'utf-8'));
           const age = Math.floor(Date.now() / 1000) - markerData.timestamp;
-          if (age > 14400) isNewSession = true;
+          if (age > SESSION_EXPIRY_SECONDS) isNewSession = true;
         } catch {
           isNewSession = true;
         }
@@ -600,7 +596,7 @@ export async function runHookContextReload(): Promise<void> {
       try {
         const flagData = JSON.parse(readFileSync(compactionFlag, 'utf-8'));
         const age = Math.floor(Date.now() / 1000) - flagData.timestamp;
-        if (age > 3600) {
+        if (age > COMPACTION_FLAG_MAX_AGE) {
           try { unlinkSync(compactionFlag); } catch {}
           if (!isNewSession) return;
         }
@@ -685,6 +681,207 @@ export async function runHookContextReload(): Promise<void> {
     // Log errors to stderr for debugging (never to stdout)
     console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+// ── Hook: Stop (Auto Session Summary) ───────────────────────
+
+function readStopHookInput(): {
+  session_id: string;
+  transcript_path: string;
+  cwd: string;
+  stop_hook_active: boolean;
+  last_assistant_message: string;
+} {
+  let stdinData = '';
+  try {
+    stdinData = readFileSync(0, 'utf-8');
+  } catch {
+    return { session_id: '', transcript_path: '', cwd: '', stop_hook_active: false, last_assistant_message: '' };
+  }
+  try {
+    const input = JSON.parse(stdinData);
+    return {
+      session_id: input.session_id || '',
+      transcript_path: input.transcript_path || '',
+      cwd: input.cwd || '',
+      stop_hook_active: input.stop_hook_active === true,
+      last_assistant_message: input.last_assistant_message || '',
+    };
+  } catch {
+    return { session_id: '', transcript_path: '', cwd: '', stop_hook_active: false, last_assistant_message: '' };
+  }
+}
+
+function summaryFlagPath(sessionId: string): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+  return join(FLAG_DIR, `summary-${safe || 'unknown'}`);
+}
+
+function checkSessionSubstantial(transcriptPath: string): boolean {
+  try {
+    const raw = readFileSync(transcriptPath, 'utf-8');
+    const lines = raw.trim().split('\n');
+
+    if (lines.length < SUMMARY_CONFIG.minTranscriptLines) return false;
+
+    let userMessageCount = 0;
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        const role = entry.message?.role || entry.role;
+        if (role === 'user') {
+          const text = extractText(entry.message?.content || entry.content);
+          if (text.trim().length > 10) userMessageCount++;
+        }
+      } catch { /* skip malformed lines */ }
+    }
+
+    return userMessageCount >= SUMMARY_CONFIG.minUserMessages;
+  } catch {
+    return false;
+  }
+}
+
+function buildStopSummary(transcriptPath: string, cwd: string, lastMessage: string): string {
+  const raw = readFileSync(transcriptPath, 'utf-8');
+  const lines = raw.trim().split('\n');
+
+  const getMsg = (entry: any): { role: string; content: any } | null => {
+    if (entry.message?.role && entry.message?.content !== undefined) {
+      return { role: entry.message.role, content: entry.message.content };
+    }
+    if (entry.role && entry.content !== undefined) {
+      return { role: entry.role, content: entry.content };
+    }
+    return null;
+  };
+
+  // Find the original task
+  let mainTask = '';
+  for (let i = 0; i < Math.min(lines.length, 100); i++) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg && msg.role === 'user') {
+        const text = extractText(msg.content).trim();
+        if (text.length > 30) {
+          mainTask = text.length > 400 ? text.slice(0, 400) + '...' : text;
+          break;
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // Collect files worked on
+  const filesInvolved = new Set<string>();
+  for (let i = Math.max(0, lines.length - 150); i < lines.length; i++) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      const msg = getMsg(entry);
+      if (msg) {
+        for (const f of extractFilePaths(msg.content)) {
+          filesInvolved.add(f);
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // Build summary
+  const parts: string[] = [];
+  parts.push(`Session ended at ${new Date().toISOString()}`);
+  parts.push(`Working directory: ${cwd || 'unknown'}`);
+
+  if (mainTask) {
+    parts.push(`\nTask: ${mainTask}`);
+  }
+
+  if (filesInvolved.size > 0) {
+    const fileList = Array.from(filesInvolved).slice(0, 15).join(', ');
+    parts.push(`\nFiles worked on: ${fileList}`);
+  }
+
+  if (lastMessage && lastMessage.length > 20) {
+    const truncated = lastMessage.length > 500 ? lastMessage.slice(0, 500) + '...' : lastMessage;
+    parts.push(`\nFinal response: ${truncated}`);
+  }
+
+  return parts.join('\n');
+}
+
+export async function runHookStop(): Promise<void> {
+  try {
+    const hookInput = readStopHookInput();
+
+    // CRITICAL: If stop_hook_active is true, a previous Stop hook already ran.
+    // Exit immediately to prevent infinite loops.
+    if (hookInput.stop_hook_active) return;
+
+    const sessionId = hookInput.session_id;
+    if (!sessionId) return;
+
+    // Check if we already saved a summary for this session recently
+    const flag = summaryFlagPath(sessionId);
+    if (existsSync(flag)) {
+      try {
+        const flagData = JSON.parse(readFileSync(flag, 'utf-8'));
+        const age = Math.floor(Date.now() / 1000) - flagData.timestamp;
+        if (age < SUMMARY_CONFIG.cooldownSeconds) return;
+      } catch {
+        // Corrupt flag — continue and save
+      }
+    }
+
+    // Check if session is substantial enough to save
+    const { transcript_path } = hookInput;
+    if (!transcript_path) return;
+
+    const isSubstantial = checkSessionSubstantial(transcript_path);
+    if (!isSubstantial) return;
+
+    const apiKey = resolveApiKey();
+    if (!apiKey) return;
+
+    // Build summary from transcript
+    let summary = '';
+    try {
+      summary = buildStopSummary(transcript_path, hookInput.cwd, hookInput.last_assistant_message);
+    } catch {
+      return;
+    }
+
+    if (!summary || summary.length < 20) return;
+
+    // Truncate
+    if (summary.length > SUMMARY_CONFIG.maxSummaryChars) {
+      summary = summary.slice(0, SUMMARY_CONFIG.maxSummaryChars - 3) + '...';
+    }
+
+    // Save via API (fire-and-forget — never block Claude from stopping)
+    try {
+      await fetch(`${API_BASE}/cogmemai/session-summary`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ summary }),
+      });
+    } catch {
+      // Network failure — non-critical
+    }
+
+    // Write flag so we don't save again this session
+    mkdirSync(FLAG_DIR, { recursive: true });
+    writeFileSync(flag, JSON.stringify({
+      timestamp: Math.floor(Date.now() / 1000),
+      session_id: sessionId,
+    }));
+  } catch {
+    // Never fail — don't interfere with Claude stopping
+  }
+
+  // Output empty JSON to allow Claude to stop
+  console.log(JSON.stringify({}));
 }
 
 // ── Auto-Ingest Documents ────────────────────────────────────
@@ -849,6 +1046,22 @@ export function configureHooks(): { success: boolean; error?: string } {
       });
     }
 
+    // Add Stop hook (auto-session-summary)
+    if (!settings.hooks.Stop) {
+      settings.hooks.Stop = [];
+    }
+    if (!hasCogmemaiHook(settings.hooks.Stop, 'cogmemai-mcp hook stop')) {
+      settings.hooks.Stop.push({
+        hooks: [
+          {
+            type: 'command',
+            command: 'cogmemai-mcp hook stop',
+            timeout: SUMMARY_CONFIG.hookTimeoutSeconds,
+          },
+        ],
+      });
+    }
+
     // Create ~/.cogmemai/ directory
     mkdirSync(FLAG_DIR, { recursive: true });
 
@@ -874,6 +1087,11 @@ export function showHelp(): void {
   log('');
   log(`  ${BOLD}As MCP server:${RESET}`);
   log(`    cogmemai-mcp                    Start MCP server (stdio transport)`);
+  log('');
+  log(`  ${BOLD}Hooks:${RESET}`);
+  log(`    cogmemai-mcp hook precompact    Save context before compaction`);
+  log(`    cogmemai-mcp hook context-reload Reload context after compaction/new session`);
+  log(`    cogmemai-mcp hook stop          Auto-save session summary on exit`);
   log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);

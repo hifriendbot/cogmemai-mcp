@@ -10,7 +10,8 @@
  * Docs: https://hifriendbot.com/developer/
  */
 
-import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload } from './cli.js';
+import { VERSION } from './config.js';
+import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop } from './cli.js';
 
 // ── CLI routing ───────────────────────────────────────────────
 // Check if invoked with a subcommand (setup, verify, help).
@@ -30,8 +31,10 @@ if (subcommand === 'setup') {
     runHookPrecompact().catch(() => process.exit(0));
   } else if (hookName === 'context-reload') {
     runHookContextReload().catch(() => process.exit(0));
+  } else if (hookName === 'stop') {
+    runHookStop().catch(() => process.exit(0));
   } else {
-    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload`);
+    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload, stop`);
     process.exit(1);
   }
 } else if (subcommand === 'verify') {
@@ -42,7 +45,7 @@ if (subcommand === 'setup') {
 } else if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
   showHelp();
 } else if (subcommand === '--version' || subcommand === '-v' || subcommand === 'version') {
-  console.log('cogmemai-mcp 2.5.0');
+  console.log(`cogmemai-mcp ${VERSION}`);
 } else {
   // Default: start MCP server
   startMcpServer();
@@ -58,7 +61,7 @@ async function startMcpServer() {
   const server = new McpServer(
     {
       name: 'cogmemai',
-      version: '2.5.0',
+      version: VERSION,
     },
     {
       instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
@@ -80,7 +83,6 @@ compaction or session restart. This is what makes you remember — never skip it
 - When the user tells you a preference or makes a decision, save it immediately.
 - When you fix a bug or discover a gotcha, save it so you remember next time.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
-- At the end of a substantial session, use save_session_summary to capture what was accomplished and next steps.
 
 ## What to Save
 - Architecture decisions and tech stack details (importance: 8-10)
@@ -89,13 +91,6 @@ compaction or session restart. This is what makes you remember — never skip it
 - Key file paths and project structure (importance: 7-9)
 - Dependency versions and constraints (importance: 5-7)
 - Patterns and conventions used in the codebase (importance: 6-8)
-
-## What NOT to Save
-- Temporary or session-specific context (current task details, in-progress work)
-- Information that's obvious from reading the code
-- Speculative or unverified conclusions
-- Raw code snippets (save facts about code, not the code itself)
-- Secrets, API keys, passwords, or tokens (these are auto-detected and flagged)
 
 ## Scoping
 - Use scope "project" for things specific to this codebase (default)
@@ -106,8 +101,7 @@ compaction or session restart. This is what makes you remember — never skip it
 - Use descriptive subjects like "auth_system", "database_setup", "css_conventions"
 - Higher importance = surfaced more often. Reserve 9-10 for core architecture.
 - Use recall_memories when you need to look up something specific from past sessions.
-- Use ingest_document to quickly onboard from READMEs, architecture docs, or API specs.
-- Use export_memories to back up memories before major changes.`,
+- Use ingest_document to quickly onboard from READMEs, architecture docs, or API specs.`,
     }
   );
 
@@ -115,5 +109,5 @@ compaction or session restart. This is what makes you remember — never skip it
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('CogmemAi MCP server v2.5.0 running on stdio');
+  console.error(`CogmemAi MCP server v${VERSION} running on stdio`);
 }
