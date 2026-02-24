@@ -16,7 +16,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 const API_BASE = 'https://hifriendbot.com/wp-json/hifriendbot/v1';
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 
 const FLAG_DIR = join(homedir(), '.cogmemai');
 
@@ -284,7 +284,19 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log(`  ${DIM}CogmemAi will still work, but context won't auto-recover after compaction${RESET}`);
   }
 
-  // Step 5: Offer document ingestion to seed project memory
+  // Step 5: Configure auto-memory loading via CLAUDE.md
+  log('');
+  log(`  ${BOLD}Step 5:${RESET} Configuring auto-memory loading...`);
+
+  const claudeMdResult = generateClaudeMd();
+  if (claudeMdResult.success) {
+    success('CLAUDE.md configured — memories load automatically every session');
+  } else {
+    warn(`Could not configure CLAUDE.md: ${claudeMdResult.error}`);
+    log(`  ${DIM}You can manually add memory instructions to ~/.claude/CLAUDE.md${RESET}`);
+  }
+
+  // Step 6: Offer document ingestion to seed project memory
   await offerDocumentIngest(apiKey);
 
   // Save version to memory
@@ -569,7 +581,8 @@ export async function runHookContextReload(): Promise<void> {
     if (!isPostCompaction && !isNewSession) {
       // Opt-in recall hint for existing sessions
       if (process.env.COGMEMAI_RECALL_HINT === '1' && existsSync(marker)) {
-        process.stdout.write(JSON.stringify({
+        console.log(JSON.stringify({
+          result: 'success',
           additionalContext: 'CogmemAi: You have persistent memory. If this task involves past context, use recall_memories to search for relevant memories.',
         }));
       }
@@ -652,12 +665,18 @@ export async function runHookContextReload(): Promise<void> {
       ? 'CogmemAi — Context recovered after compaction.'
       : 'CogmemAi — Project context loaded from previous sessions.';
 
+    const instruction = '\n\nIMPORTANT: Your memories are loaded above. Use recall_memories to search for specific past context. Save new learnings with save_memory.';
+
     const output = JSON.stringify({
-      additionalContext: `${label} Your memories have been reloaded:\n\n${context}`,
+      result: 'success',
+      additionalContext: `${label} Your memories have been reloaded:\n\n${context}${instruction}`,
     });
-    process.stdout.write(output);
-  } catch {
-    // Never fail — don't break user's message flow
+
+    // Use console.log for reliable stdout flushing (adds newline, auto-flushes)
+    console.log(output);
+  } catch (err) {
+    // Log errors to stderr for debugging (never to stdout)
+    console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -683,7 +702,7 @@ async function offerDocumentIngest(apiKey: string): Promise<void> {
   if (candidates.length === 0) return;
 
   log('');
-  log(`  ${BOLD}Step 5:${RESET} Seed project memory`);
+  log(`  ${BOLD}Step 6:${RESET} Seed project memory`);
   log(`  ${DIM}Found ${candidates.map(c => c.name).join(' and ')} in current directory${RESET}`);
 
   const answer = await prompt(`  Ingest to seed memory? (Y/n): `);
@@ -721,6 +740,44 @@ async function offerDocumentIngest(apiKey: string): Promise<void> {
     } catch (err: any) {
       warn(`${candidate.name}: ${err.message || 'read error'}`);
     }
+  }
+}
+
+// ── Generate CLAUDE.md ───────────────────────────────────
+
+function generateClaudeMd(): { success: boolean; error?: string } {
+  try {
+    const claudeDir = join(homedir(), '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const claudeMdPath = join(claudeDir, 'CLAUDE.md');
+
+    const cogmemaiSection = `# CogmemAi Memory
+
+You have persistent memory powered by CogmemAi. At the start of EVERY conversation, you MUST call the \`get_project_context\` MCP tool before responding to any message — even simple greetings. This loads your memories from previous sessions and is critical for continuity. Never skip this step.
+`;
+
+    // Check if file exists and already has CogmemAi section
+    if (existsSync(claudeMdPath)) {
+      const existing = readFileSync(claudeMdPath, 'utf-8');
+      if (existing.includes('CogmemAi Memory')) {
+        // Already has our section — update it
+        const updated = existing.replace(
+          /# CogmemAi Memory[\s\S]*?(?=\n#\s|\n*$)/,
+          cogmemaiSection.trim()
+        );
+        writeFileSync(claudeMdPath, updated);
+        return { success: true };
+      }
+      // Append our section
+      const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+      writeFileSync(claudeMdPath, existing + separator + cogmemaiSection);
+    } else {
+      writeFileSync(claudeMdPath, cogmemaiSection);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to create CLAUDE.md' };
   }
 }
 

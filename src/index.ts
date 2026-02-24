@@ -42,7 +42,7 @@ if (subcommand === 'setup') {
 } else if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
   showHelp();
 } else if (subcommand === '--version' || subcommand === '-v' || subcommand === 'version') {
-  console.log('cogmemai-mcp 2.4.0');
+  console.log('cogmemai-mcp 2.5.0');
 } else {
   // Default: start MCP server
   startMcpServer();
@@ -58,7 +58,7 @@ async function startMcpServer() {
   const server = new McpServer(
     {
       name: 'cogmemai',
-      version: '2.4.0',
+      version: '2.5.0',
     },
     {
       instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
@@ -115,5 +115,5 @@ compaction or session restart. This is what makes you remember — never skip it
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('CogmemAi MCP server v2.4.0 running on stdio');
+  console.error('CogmemAi MCP server v2.5.0 running on stdio');
 }

@@ -18,8 +18,21 @@ const MEMORY_TYPES = [
   'context',
 ] as const;
 
+// Session tracking: detect if get_project_context was called
+let contextLoaded = false;
+
+const CONTEXT_REMINDER = '\n\n⚠️ REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
+
+function wrapResult(result: unknown, skipReminder = false): { content: Array<{ type: 'text'; text: string }> } {
+  let text = JSON.stringify(result, null, 2);
+  if (!contextLoaded && !skipReminder) {
+    text += CONTEXT_REMINDER;
+  }
+  return { content: [{ type: 'text' as const, text }] };
+}
+
 /**
- * Register all 12 CogmemAi tools on the MCP server.
+ * Register all CogmemAi tools on the MCP server.
  */
 export function registerTools(server: McpServer): void {
   // ─── 1. save_memory ──────────────────────────────────────
@@ -95,11 +108,7 @@ export function registerTools(server: McpServer): void {
       if (tags && tags.length > 0) body.tags = tags;
       if (ttl) body.ttl = ttl;
       const result = await api('/cogmemai/store', 'POST', body);
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -156,11 +165,7 @@ export function registerTools(server: McpServer): void {
         tag: tag || undefined,
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -194,11 +199,7 @@ export function registerTools(server: McpServer): void {
         previous_context: previous_context || '',
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -236,11 +237,8 @@ export function registerTools(server: McpServer): void {
       if (context) params.context = context;
       if (context_type) params.context_type = context_type;
       const result = await api('/cogmemai/context', 'GET', params);
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      contextLoaded = true;
+      return wrapResult(result, true); // skip reminder — this IS the context load
     }
   );
 
@@ -295,11 +293,7 @@ export function registerTools(server: McpServer): void {
       if (tag) params.tag = tag;
 
       const result = await api('/cogmemai/memories', 'GET', params);
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -313,11 +307,7 @@ export function registerTools(server: McpServer): void {
     },
     async ({ memory_id }) => {
       const result = await api(`/cogmemai/memory/${memory_id}`, 'DELETE');
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -353,11 +343,7 @@ export function registerTools(server: McpServer): void {
       if (scope !== undefined) body.scope = scope;
 
       const result = await api(`/cogmemai/memory/${memory_id}`, 'PATCH', body);
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -369,11 +355,7 @@ export function registerTools(server: McpServer): void {
     {},
     async () => {
       const result = await api('/cogmemai/usage', 'GET');
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -388,11 +370,7 @@ export function registerTools(server: McpServer): void {
       const result = await api('/cogmemai/export', 'GET', {
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result, true); // export is intentional, skip reminder
     }
   );
 
@@ -429,11 +407,7 @@ export function registerTools(server: McpServer): void {
         memories: parsed,
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result, true); // import is intentional, skip reminder
     }
   );
 
@@ -463,11 +437,7 @@ export function registerTools(server: McpServer): void {
         document_type,
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result, true); // ingest is intentional, skip reminder
     }
   );
 
@@ -491,11 +461,7 @@ export function registerTools(server: McpServer): void {
         summary,
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result, true); // session summary at end, skip reminder
     }
   );
 
@@ -510,11 +476,7 @@ export function registerTools(server: McpServer): void {
       const result = await api('/cogmemai/tags', 'GET', {
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -537,11 +499,7 @@ export function registerTools(server: McpServer): void {
         related_memory_id,
         relationship,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -555,11 +513,7 @@ export function registerTools(server: McpServer): void {
     },
     async ({ memory_id }) => {
       const result = await api(`/cogmemai/memory/${memory_id}/links`, 'GET');
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -573,11 +527,7 @@ export function registerTools(server: McpServer): void {
     },
     async ({ memory_id }) => {
       const result = await api(`/cogmemai/memory/${memory_id}/versions`, 'GET');
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -592,11 +542,7 @@ export function registerTools(server: McpServer): void {
       const result = await api('/cogmemai/analytics', 'GET', {
         project_id: projectId,
       });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 
@@ -610,11 +556,7 @@ export function registerTools(server: McpServer): void {
     },
     async ({ memory_id }) => {
       const result = await api(`/cogmemai/memory/${memory_id}/promote`, 'POST');
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
+      return wrapResult(result);
     }
   );
 }
