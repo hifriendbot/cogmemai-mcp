@@ -14,13 +14,13 @@ One command. Claude Code remembers your architecture, patterns, decisions, bugs,
 npx cogmemai-mcp setup
 ```
 
-That's it. The setup wizard verifies your API key, configures Claude Code, and you're ready. Start Claude Code by typing `claude` and your memories are ready.
+That's it. The setup wizard verifies your API key, configures Claude Code, installs automatic context recovery, and you're ready. Start Claude Code by typing `claude` and your memories are ready.
 
 Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
 
 ## The Problem
 
-Every time you start a new Claude Code session, you lose context. You re-explain your tech stack, your architecture decisions, your coding preferences. Claude Code's built-in memory is a 200-line flat file with no search, no structure, and no intelligence.
+Every time you start a new Claude Code session, you lose context. You re-explain your tech stack, your architecture decisions, your coding preferences. Claude Code's built-in memory is a flat file with no search, no structure, and no intelligence.
 
 CogmemAi gives Claude Code a real memory system:
 
@@ -30,26 +30,20 @@ CogmemAi gives Claude Code a real memory system:
 - **Privacy controls** — auto-detects API keys, tokens, and secrets before storing
 - **Document ingestion** — feed in READMEs and docs to instantly build project context
 - **Project scoping** — memories tied to specific repos, plus global preferences that follow you everywhere
-- **Smart context** — blends importance, semantic relevance, and recency for better retrieval
-- **Auto-reload after compaction** — survives Claude Code context compaction automatically
+- **Smart context** — blends importance, semantic relevance, and recency for optimal retrieval
+- **Compaction recovery** — survives Claude Code context compaction automatically
+- **Token-efficient** — compact context loading that won't bloat your conversation
 - **Zero setup** — no databases, no Docker, no Python, no vector stores
 
-## Why Not Local Memory?
+## Why Cloud Memory?
 
-Every local memory solution has the same problems: database corruption, memory leaks, version conflicts, complex setup. [claude-mem](https://github.com/nicobailon/claude-mem) (13K+ stars) leaks 15GB+ of RAM. [mcp-memory-service](https://github.com/doobidoo/mcp-memory-service) released v10.0.0 marked "BROKEN."
-
-CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero crashes.**
+Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.**
 
 ## Compaction Recovery
 
-When Claude Code compacts your context (auto or manual), conversation history gets compressed and context is lost. CogmemAi handles this automatically with two hooks:
+When Claude Code compacts your context, conversation history gets compressed and context is lost. CogmemAi handles this automatically — your context is preserved before compaction and seamlessly restored afterward. No re-explaining, no manual prompting.
 
-1. **PreCompact** — Before compaction, saves a session summary to the cloud
-2. **UserPromptSubmit** — On your next message after compaction, detects the compaction, fetches your project context from the API, and injects it directly into the conversation
-
-The result: seamless recovery. Claude responds with full context after compaction — no re-explaining, no manual prompting.
-
-The `npx cogmemai-mcp setup` command installs both hooks automatically into `~/.claude/settings.json`. Hooks are session-specific — multiple terminals won't interfere with each other.
+The `npx cogmemai-mcp setup` command configures everything automatically.
 
 ## CLI Commands
 
@@ -161,7 +155,7 @@ CogmemAi provides 18 tools that your Ai assistant uses automatically:
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
-| `get_project_context` | Load top memories at session start (with optional context for smart ranking) |
+| `get_project_context` | Load top memories at session start (with smart ranking and compact mode) |
 | `list_memories` | Browse memories with filters (paginated) |
 | `update_memory` | Update a memory's content, importance, or scope |
 | `delete_memory` | Permanently delete a memory |
@@ -170,6 +164,12 @@ CogmemAi provides 18 tools that your Ai assistant uses automatically:
 | `import_memories` | Bulk import memories from a JSON array |
 | `ingest_document` | Feed in a document (README, API docs) to auto-extract memories |
 | `save_session_summary` | Save a summary of what was accomplished in this session |
+| `list_tags` | View all tags in use across your memories |
+| `link_memories` | Connect related memories with named relationships |
+| `get_memory_links` | Explore the knowledge graph around a memory |
+| `get_memory_versions` | View edit history of a memory |
+| `get_analytics` | Memory health dashboard with insights |
+| `promote_memory` | Promote a project memory to global scope |
 
 ## SDKs
 
@@ -224,23 +224,6 @@ Read our full [privacy policy](https://hifriendbot.com/privacy-policy/).
 |----------|----------|-------------|
 | `COGMEMAI_API_KEY` | Yes | Your API key (starts with `cm_`) |
 | `COGMEMAI_API_URL` | No | Custom API URL (default: hifriendbot.com) |
-
-## How It Works
-
-```
-Your Terminal                          CogmemAi Cloud
-┌──────────────┐                     ┌─────────────────────┐
-│ Claude Code  │                     │ 3-Layer Memory      │
-│              │                     │                     │
-│ cogmemai-mcp │ ──── HTTPS ────►    │ 1. Ai Extraction    │
-│ (MCP Server) │ ◄──── JSON ────    │ 2. Semantic Search  │
-│              │                     │ 3. Time-Aware Rank  │
-└──────────────┘                     └─────────────────────┘
-```
-
-1. **Extraction** — When Claude Code works on your project, CogmemAi's Ai identifies important facts (architecture decisions, preferences, bugs) and stores them.
-2. **Embedding** — Each memory gets a semantic embedding vector for meaning-based search.
-3. **Surfacing** — When you start a new session, relevant memories are surfaced by meaning, importance, and recency.
 
 ## Support
 
