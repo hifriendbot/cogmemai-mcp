@@ -1,11 +1,14 @@
 /**
- * CogmemAi MCP tool definitions — 18 tools for developer memory.
+ * CogmemAi MCP tool definitions — 21 tools for developer memory.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { api } from './api.js';
 import { detectProjectId } from './project.js';
+import { FLAG_DIR } from './config.js';
 
 const MEMORY_TYPES = [
   'identity',
@@ -29,6 +32,25 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
     text += CONTEXT_REMINDER;
   }
   return { content: [{ type: 'text' as const, text }] };
+}
+
+/**
+ * Cache topic index to disk for hook-based smart recall.
+ * Written when get_project_context succeeds.
+ */
+function cacheTopicIndex(projectId: string, topicIndex: unknown[]): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+    const cachePath = join(FLAG_DIR, `topics-${safe}.json`);
+    writeFileSync(cachePath, JSON.stringify({
+      timestamp: Math.floor(Date.now() / 1000),
+      project_id: projectId,
+      topics: topicIndex,
+    }));
+  } catch {
+    // Non-critical — smart recall just won't work until next cache write
+  }
 }
 
 function wrapError(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError: true } {
@@ -275,13 +297,20 @@ export function registerTools(server: McpServer): void {
         const result = await api('/cogmemai/context', 'GET', params) as Record<string, unknown>;
         contextLoaded = true;
 
+        // Cache topic index for hook-based smart recall
+        if (Array.isArray(result.topic_index)) {
+          cacheTopicIndex(pid, result.topic_index);
+        }
+
         if (compact) {
           return wrapResult({
             formatted_context: result.formatted_context || '',
             total_count: result.total_count || 0,
           }, true);
         }
-        return wrapResult(result, true);
+        // Strip topic_index from full response (internal use only)
+        const { topic_index: _ti, ...clientResult } = result;
+        return wrapResult(clientResult, true);
       } catch (error) {
         return wrapError(error);
       }
@@ -324,8 +353,12 @@ export function registerTools(server: McpServer): void {
         .optional()
         .describe('Filter by tag (e.g., "marketing-campaign")'),
       offset: z.number().int().default(0).describe('Pagination offset'),
+      untyped: z
+        .boolean()
+        .optional()
+        .describe('When true, only return memories with no memory_type set'),
     },
-    async ({ memory_type, category, importance_min, scope, limit, tag, offset }) => {
+    async ({ memory_type, category, importance_min, scope, limit, tag, offset, untyped }) => {
       try {
         const projectId = detectProjectId();
         const params: Record<string, unknown> = {
@@ -338,6 +371,7 @@ export function registerTools(server: McpServer): void {
         if (importance_min) params.importance_min = importance_min;
         if (scope && scope !== 'all') params.scope = scope;
         if (tag) params.tag = tag;
+        if (untyped) params.untyped = 'true';
 
         const result = await api('/cogmemai/memories', 'GET', params);
         return wrapResult(result);
@@ -389,15 +423,93 @@ export function registerTools(server: McpServer): void {
         .enum(['global', 'project'])
         .optional()
         .describe('New scope'),
+      memory_type: z
+        .enum(MEMORY_TYPES)
+        .optional()
+        .describe('New memory type'),
+      category: z
+        .string()
+        .max(50)
+        .optional()
+        .describe('New category (e.g., "backend", "frontend", or any custom category)'),
+      subject: z
+        .string()
+        .max(100)
+        .optional()
+        .describe('New subject (e.g., "auth_system", "react_version")'),
+      tags: z
+        .array(z.string().max(30))
+        .max(5)
+        .optional()
+        .describe('New tags (replaces existing tags)'),
     },
-    async ({ memory_id, content, importance, scope }) => {
+    async ({ memory_id, content, importance, scope, memory_type, category, subject, tags }) => {
       try {
         const body: Record<string, unknown> = {};
         if (content !== undefined) body.content = content;
         if (importance !== undefined) body.importance = importance;
         if (scope !== undefined) body.scope = scope;
+        if (memory_type !== undefined) body.memory_type = memory_type;
+        if (category !== undefined) body.category = category;
+        if (subject !== undefined) body.subject = subject;
+        if (tags !== undefined) body.tags = tags;
 
         const result = await api(`/cogmemai/memory/${memory_id}`, 'PATCH', body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 7b. bulk_delete ─────────────────────────────────
+
+  server.tool(
+    'bulk_delete',
+    'Delete multiple memories at once by their IDs. Maximum 100 IDs per call. This is permanent.',
+    {
+      ids: z
+        .array(z.number().int())
+        .min(1)
+        .max(100)
+        .describe('Array of memory IDs to delete (max 100)'),
+    },
+    async ({ ids }) => {
+      try {
+        const result = await api('/cogmemai/bulk-delete', 'POST', { ids });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 7c. bulk_update ─────────────────────────────────
+
+  server.tool(
+    'bulk_update',
+    'Update multiple memories at once. Each item needs a memory_id and fields to update. Maximum 50 items per call.',
+    {
+      updates: z
+        .array(
+          z.object({
+            memory_id: z.number().int().describe('Memory ID to update'),
+            content: z.string().min(5).max(500).optional().describe('New content'),
+            importance: z.number().int().min(1).max(10).optional().describe('New importance'),
+            scope: z.enum(['global', 'project']).optional().describe('New scope'),
+            memory_type: z.enum(MEMORY_TYPES).optional().describe('New memory type'),
+            category: z.string().max(50).optional().describe('New category'),
+            subject: z.string().max(100).optional().describe('New subject'),
+            tags: z.array(z.string().max(30)).max(5).optional().describe('New tags'),
+          })
+        )
+        .min(1)
+        .max(50)
+        .describe('Array of update objects (max 50)'),
+    },
+    async ({ updates }) => {
+      try {
+        const result = await api('/cogmemai/bulk-update', 'POST', { updates });
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -623,13 +735,22 @@ export function registerTools(server: McpServer): void {
   server.tool(
     'get_analytics',
     'Get a memory health dashboard with insights: most recalled memories, never-recalled memories, stale memories, growth trends, and breakdowns by type and category. Use this to identify cleanup opportunities and understand memory usage patterns.',
-    {},
-    async () => {
+    {
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Filter analytics to a specific project. Omit for current project. Use "all" for cross-project analytics.'),
+    },
+    async ({ project_id }) => {
       try {
-        const projectId = detectProjectId();
-        const result = await api('/cogmemai/analytics', 'GET', {
-          project_id: projectId,
-        });
+        const params: Record<string, string> = {};
+        if (project_id === 'all') {
+          // Omit project_id entirely for cross-project
+        } else {
+          params.project_id = project_id || detectProjectId();
+        }
+        const result = await api('/cogmemai/analytics', 'GET', params);
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -648,6 +769,50 @@ export function registerTools(server: McpServer): void {
     async ({ memory_id }) => {
       try {
         const result = await api(`/cogmemai/memory/${memory_id}/promote`, 'POST');
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 18. consolidate_memories ──────────────────────────
+
+  server.tool(
+    'consolidate_memories',
+    'Consolidate related memories into fewer, richer memories. Finds clusters of memories sharing the same subject (3+ memories required), then uses AI to synthesize each cluster into 1-2 comprehensive facts. Originals are archived (not deleted) with full version history. Use dry_run=true to preview without making changes. Great for cleaning up memory clutter after many sessions.',
+    {
+      subject: z
+        .string()
+        .max(100)
+        .optional()
+        .describe('Consolidate only memories with this exact subject (e.g., "auth_system"). Omit to auto-detect all qualifying clusters.'),
+      memory_type: z
+        .enum(MEMORY_TYPES)
+        .optional()
+        .describe('Only consolidate memories of this type'),
+      category: z
+        .string()
+        .max(50)
+        .optional()
+        .describe('Only consolidate memories in this category'),
+      dry_run: z
+        .boolean()
+        .default(false)
+        .describe('When true, preview consolidation results without making changes. Recommended for first use.'),
+    },
+    async ({ subject, memory_type, category, dry_run }) => {
+      try {
+        const projectId = detectProjectId();
+        const body: Record<string, unknown> = {
+          project_id: projectId,
+          dry_run,
+        };
+        if (subject) body.subject = subject;
+        if (memory_type) body.memory_type = memory_type;
+        if (category) body.category = category;
+
+        const result = await api('/cogmemai/consolidate', 'POST', body);
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);

@@ -14,7 +14,7 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync, appendFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE } from './config.js';
+import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH } from './config.js';
 
 // Helper: read session_id from stdin hook input
 function readHookInput(): { session_id: string; transcript_path: string; cwd: string } {
@@ -47,6 +47,31 @@ function flagPath(sessionId: string): string {
 function sessionMarkerPath(sessionId: string): string {
   const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   return join(FLAG_DIR, `session-${safe || 'unknown'}`);
+}
+
+// Topic index cache path for smart recall
+function topicCachePath(projectId: string): string {
+  const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  return join(FLAG_DIR, `topics-${safe}.json`);
+}
+
+// Detect project ID from git remote (for hook context)
+function detectProjectIdForHook(cwd: string): string {
+  try {
+    const remote = execSync('git remote get-url origin', {
+      encoding: 'utf-8',
+      timeout: 3000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: cwd || undefined,
+    }).trim();
+    return remote
+      .replace(/\.git$/, '')
+      .replace(/^https?:\/\/[^/]+\//, '')
+      .replace(/^git@[^:]+:/, '');
+  } catch {
+    const parts = (cwd || process.cwd()).split(/[\\/]/);
+    return parts[parts.length - 1] || 'unknown';
+  }
 }
 
 // ── Resolve API Key ──────────────────────────────────────────
@@ -612,6 +637,91 @@ export async function runHookPrecompact(): Promise<void> {
   }
 }
 
+// ── Smart Recall Helpers ──────────────────────────────────────
+
+// Stop words that don't indicate topic intent
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'it', 'in', 'on', 'to', 'for', 'and', 'or', 'but',
+  'with', 'that', 'this', 'from', 'at', 'by', 'do', 'does', 'did', 'can',
+  'could', 'would', 'should', 'will', 'have', 'has', 'had', 'been', 'being',
+  'be', 'am', 'are', 'was', 'were', 'let', 'me', 'my', 'you', 'your', 'we',
+  'our', 'they', 'their', 'he', 'she', 'his', 'her', 'its', 'what', 'which',
+  'who', 'how', 'when', 'where', 'why', 'if', 'then', 'else', 'not', 'no',
+  'yes', 'ok', 'okay', 'just', 'also', 'now', 'so', 'very', 'too', 'here',
+  'there', 'all', 'any', 'some', 'every', 'each', 'these', 'those', 'of',
+  'about', 'want', 'need', 'like', 'make', 'get', 'go', 'know', 'think',
+  'see', 'look', 'use', 'try', 'tell', 'give', 'take', 'come', 'put', 'say',
+  'thing', 'way', 'sure', 'right', 'well', 'really', 'going', 'still',
+]);
+
+// Extract keywords from user message for topic matching
+function extractKeywords(message: string): string[] {
+  const words = message.toLowerCase().split(/[\s.,;:!?()\[\]{}'"/\\@#$%^&*+=<>~`]+/);
+  const keywords: string[] = [];
+  for (const word of words) {
+    const w = word.trim();
+    if (w.length >= 3 && !STOP_WORDS.has(w) && !/^\d+$/.test(w)) {
+      keywords.push(w);
+    }
+  }
+  return [...new Set(keywords)];
+}
+
+// Match user keywords against cached topic index
+// Returns matched topics sorted by relevance (match count * avg_importance)
+function matchTopics(
+  keywords: string[],
+  topicIndex: Array<{ subject: string; keywords: string[]; count: number; avg_importance: number }>
+): Array<{ subject: string; score: number }> {
+  const matches: Array<{ subject: string; score: number }> = [];
+
+  for (const topic of topicIndex) {
+    let matchCount = 0;
+    for (const kw of keywords) {
+      for (const topicKw of topic.keywords) {
+        // Exact match or substring (e.g., "stripe" matches "stripe")
+        if (kw === topicKw || topicKw.includes(kw) || kw.includes(topicKw)) {
+          matchCount++;
+          break; // Don't double-count same keyword
+        }
+      }
+    }
+    if (matchCount >= 1) {
+      matches.push({
+        subject: topic.subject,
+        score: matchCount * topic.avg_importance,
+      });
+    }
+  }
+
+  // Sort by score descending
+  matches.sort((a, b) => b.score - a.score);
+  return matches;
+}
+
+// Read the last user message from the transcript
+function getLastUserMessage(transcriptPath: string): string {
+  try {
+    const raw = readFileSync(transcriptPath, 'utf-8');
+    const lines = raw.trim().split('\n');
+
+    // Search backwards for the most recent user message
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 30); i--) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        const role = entry.message?.role || entry.role;
+        if (role === 'user') {
+          const text = extractText(entry.message?.content || entry.content).trim();
+          if (text.length > 10) {
+            return text.length > 500 ? text.slice(0, 500) : text;
+          }
+        }
+      } catch { /* skip malformed */ }
+    }
+  } catch { /* can't read transcript */ }
+  return '';
+}
+
 // ── Hook: Context Reload ─────────────────────────────────────
 
 export async function runHookContextReload(): Promise<void> {
@@ -641,14 +751,12 @@ export async function runHookContextReload(): Promise<void> {
       }
     }
 
-    // Fast exit: not post-compaction AND not new session
+    // Fast exit: not post-compaction AND not new session → try smart recall
     if (!isPostCompaction && !isNewSession) {
-      // Opt-in recall hint for existing sessions
-      if (process.env.COGMEMAI_RECALL_HINT === '1' && existsSync(marker)) {
-        console.log(JSON.stringify({
-          result: 'success',
-          additionalContext: 'CogmemAi: You have persistent memory. If this task involves past context, use recall_memories to search for relevant memories.',
-        }));
+      try {
+        await trySmartRecall(hookInput, marker);
+      } catch (err) {
+        logHookError('smart-recall', err);
       }
       return;
     }
@@ -688,11 +796,17 @@ export async function runHookContextReload(): Promise<void> {
       try { unlinkSync(compactionFlag); } catch {}
     }
 
+    // Detect project ID for session tracking + smart recall
+    const projectId = detectProjectIdForHook(hookInput.cwd);
+
     // Write/update session marker so subsequent messages skip injection
     mkdirSync(FLAG_DIR, { recursive: true });
     writeFileSync(marker, JSON.stringify({
       timestamp: Math.floor(Date.now() / 1000),
       session_id: sessionId,
+      project_id: projectId,
+      last_smart_recall: 0,
+      last_smart_topics: [],
     }));
 
     if (!res.ok) return;
@@ -749,6 +863,268 @@ export async function runHookContextReload(): Promise<void> {
     logHookError('context-reload', err);
     console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+// ── Smart Recall: Proactive mid-session memory injection ─────
+
+/**
+ * Attempt smart recall — detect topic from user's message and inject
+ * relevant memories if a topic shift is detected.
+ *
+ * This runs on the fast-exit path (existing session, no compaction).
+ * It reads the user's latest message, matches against the cached topic
+ * index, and if a new topic is detected, calls the lightweight
+ * smart-recall endpoint for FULLTEXT-based memory retrieval.
+ */
+async function trySmartRecall(
+  hookInput: { session_id: string; transcript_path: string; cwd: string },
+  markerPath: string
+): Promise<void> {
+  // Read marker data (has project_id, last_smart_recall, last_smart_topics)
+  let markerData: {
+    timestamp: number;
+    session_id: string;
+    project_id?: string;
+    last_smart_recall?: number;
+    last_smart_topics?: string[];
+  };
+  try {
+    markerData = JSON.parse(readFileSync(markerPath, 'utf-8'));
+  } catch {
+    return; // Can't read marker — skip
+  }
+
+  // Check cooldown
+  const now = Math.floor(Date.now() / 1000);
+  const lastRecall = markerData.last_smart_recall || 0;
+  if (now - lastRecall < SMART_RECALL_COOLDOWN) {
+    return; // Too soon since last smart recall
+  }
+
+  // Get the user's latest message from transcript
+  if (!hookInput.transcript_path) return;
+  const userMessage = getLastUserMessage(hookInput.transcript_path);
+  if (userMessage.length < SMART_RECALL_MIN_MSG_LENGTH) {
+    return; // Message too short/trivial
+  }
+
+  // Extract keywords from user message
+  const keywords = extractKeywords(userMessage);
+  if (keywords.length < 2) {
+    return; // Not enough meaningful keywords
+  }
+
+  // Get project ID (from marker or detect)
+  const projectId = markerData.project_id || detectProjectIdForHook(hookInput.cwd);
+
+  // Read topic index from cache
+  const cachePath = topicCachePath(projectId);
+  if (!existsSync(cachePath)) {
+    return; // No topic index cached yet — skip until get_project_context is called
+  }
+
+  let topicCache: { timestamp: number; topics: Array<{ subject: string; keywords: string[]; count: number; avg_importance: number }> };
+  try {
+    topicCache = JSON.parse(readFileSync(cachePath, 'utf-8'));
+  } catch {
+    return; // Corrupt cache
+  }
+
+  // Check cache freshness (max 24 hours)
+  if (now - topicCache.timestamp > 86400) {
+    return; // Stale cache
+  }
+
+  // Match keywords against topic index
+  const matches = matchTopics(keywords, topicCache.topics);
+  if (matches.length === 0 || matches[0].score < SMART_RECALL_MIN_MATCH_SCORE) {
+    return; // No meaningful topic match
+  }
+
+  // Check if these are new topics (not recently injected)
+  const lastTopics = new Set(markerData.last_smart_topics || []);
+  const newTopics = matches.filter(m => !lastTopics.has(m.subject));
+  if (newTopics.length === 0) {
+    return; // Same topics as last injection — skip
+  }
+
+  // We have a topic match! Call the smart-recall API
+  const apiKey = resolveApiKey();
+  if (!apiKey) return;
+
+  let res: Response;
+  try {
+    res = await hookFetch(`${API_BASE}/cogmemai/smart-recall`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: userMessage.slice(0, 500),
+        project_id: projectId,
+        limit: 3,
+      }),
+    });
+  } catch {
+    return; // Network failure — non-critical
+  }
+
+  if (!res.ok) return;
+
+  const data = await res.json() as {
+    memories?: Array<{ content: string; subject: string; importance: number; memory_type: string }>;
+    matched_topics?: string[];
+  };
+
+  if (!data.memories || data.memories.length === 0) return;
+
+  // Build injection text
+  const lines: string[] = [];
+  for (const m of data.memories) {
+    const label = m.memory_type || 'context';
+    lines.push(`- [${label}] ${m.subject}: ${m.content}`);
+  }
+
+  let injection = lines.join('\n');
+  if (injection.length > SMART_RECALL_MAX_CHARS) {
+    injection = injection.slice(0, SMART_RECALL_MAX_CHARS - 40) + '\n[...use recall_memories for more]';
+  }
+
+  // Update session marker with smart recall tracking
+  const injectedTopics = matches.slice(0, 5).map(m => m.subject);
+  try {
+    writeFileSync(markerPath, JSON.stringify({
+      ...markerData,
+      timestamp: markerData.timestamp, // Keep original timestamp (for session expiry)
+      last_smart_recall: now,
+      last_smart_topics: injectedTopics,
+      project_id: projectId,
+    }));
+  } catch { /* non-critical */ }
+
+  // Output the injection
+  const topicNames = injectedTopics.slice(0, 3).join(', ');
+  console.log(JSON.stringify({
+    result: 'success',
+    additionalContext: `CogmemAi — Relevant memories detected for: ${topicNames}\n\n${injection}\n\nThese memories were automatically surfaced based on the current topic. Use recall_memories for deeper searches.`,
+  }));
+}
+
+// ── Auto-Extract: Learn from every session ───────────────────
+
+// Global cooldown file (not per-session — protects extraction quota)
+function extractCooldownPath(): string {
+  return join(FLAG_DIR, 'last-extract');
+}
+
+/**
+ * Build an extraction payload from the transcript's key exchanges.
+ * Collects the most substantive user-assistant pairs and combines them.
+ */
+function buildExtractionPayload(transcriptPath: string): { userMessages: string; assistantResponses: string } | null {
+  const raw = readFileSync(transcriptPath, 'utf-8');
+  const lines = raw.trim().split('\n');
+
+  const getMsg = (entry: any): { role: string; content: any } | null => {
+    if (entry.message?.role && entry.message?.content !== undefined) {
+      return { role: entry.message.role, content: entry.message.content };
+    }
+    if (entry.role && entry.content !== undefined) {
+      return { role: entry.role, content: entry.content };
+    }
+    return null;
+  };
+
+  // Collect all meaningful messages
+  const userTexts: string[] = [];
+  const assistantTexts: string[] = [];
+  let substantialUserCount = 0;
+
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      const msg = getMsg(entry);
+      if (!msg) continue;
+
+      const text = extractText(msg.content).trim();
+      if (text.length < 15) continue;
+
+      if (msg.role === 'user') {
+        if (text.length >= AUTO_EXTRACT_MIN_MSG_LENGTH) substantialUserCount++;
+        userTexts.push(text.length > 600 ? text.slice(0, 600) + '...' : text);
+      } else if (msg.role === 'assistant') {
+        assistantTexts.push(text.length > 600 ? text.slice(0, 600) + '...' : text);
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  // Need enough substance to be worth extracting
+  if (substantialUserCount < AUTO_EXTRACT_MIN_USER_MESSAGES) {
+    return null;
+  }
+
+  // Combine into payloads (keep within extract endpoint limits)
+  let userCombined = userTexts.join('\n---\n');
+  let assistantCombined = assistantTexts.join('\n---\n');
+
+  if (userCombined.length > 3500) userCombined = userCombined.slice(0, 3497) + '...';
+  if (assistantCombined.length > 3500) assistantCombined = assistantCombined.slice(0, 3497) + '...';
+
+  return { userMessages: userCombined, assistantResponses: assistantCombined };
+}
+
+/**
+ * Auto-extract learnings from the session transcript.
+ * Called at session end (Stop hook) to capture facts worth remembering.
+ */
+async function autoExtractFromSession(
+  transcriptPath: string,
+  cwd: string,
+  apiKey: string
+): Promise<void> {
+  // Check global cooldown (protect extraction quota)
+  const cooldownFile = extractCooldownPath();
+  const now = Math.floor(Date.now() / 1000);
+
+  if (existsSync(cooldownFile)) {
+    try {
+      const data = JSON.parse(readFileSync(cooldownFile, 'utf-8'));
+      if (now - data.timestamp < AUTO_EXTRACT_COOLDOWN) {
+        return; // Too soon since last extraction
+      }
+    } catch { /* corrupt file — continue */ }
+  }
+
+  // Build extraction payload from transcript
+  const payload = buildExtractionPayload(transcriptPath);
+  if (!payload) return; // Not enough substance
+
+  // Detect project ID for scoping
+  const projectId = detectProjectIdForHook(cwd);
+
+  // Call extract endpoint (fire-and-forget with timeout)
+  try {
+    await hookFetch(`${API_BASE}/cogmemai/extract`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_message: payload.userMessages,
+        assistant_response: payload.assistantResponses,
+        project_id: projectId,
+      }),
+    });
+  } catch {
+    // Timeout or network failure — non-critical
+    return;
+  }
+
+  // Update cooldown (even if extract returned errors — avoid hammering)
+  mkdirSync(FLAG_DIR, { recursive: true });
+  writeFileSync(cooldownFile, JSON.stringify({ timestamp: now }));
 }
 
 // ── Hook: Stop (Auto Session Summary) ───────────────────────
@@ -944,6 +1320,13 @@ export async function runHookStop(): Promise<void> {
       timestamp: Math.floor(Date.now() / 1000),
       session_id: sessionId,
     }));
+
+    // Auto-extract learnings from the session (separate from summary)
+    try {
+      await autoExtractFromSession(transcript_path, hookInput.cwd, apiKey);
+    } catch (err) {
+      logHookError('auto-extract', err);
+    }
   } catch (err) {
     logHookError('stop', err);
     // Never fail — don't interfere with Claude stopping

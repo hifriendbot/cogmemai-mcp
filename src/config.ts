@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '2.7.2';
+export const VERSION = '2.8.0';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -40,3 +40,14 @@ export const SUMMARY_CONFIG = {
   hookTimeoutSeconds: 20,
   cooldownSeconds: 1800, // 30 minutes between saves for same session
 } as const;
+
+// Smart recall — proactive mid-session memory injection on topic shift
+export const SMART_RECALL_COOLDOWN = 180;       // 3 min between smart injections
+export const SMART_RECALL_MAX_CHARS = 1500;      // Max injected content size
+export const SMART_RECALL_MIN_MSG_LENGTH = 30;   // Min user message length to trigger
+export const SMART_RECALL_MIN_MATCH_SCORE = 2;   // Min keyword matches to trigger recall
+
+// Auto-extract — learn from every session automatically
+export const AUTO_EXTRACT_COOLDOWN = 7200;         // 2 hours between auto-extractions (global)
+export const AUTO_EXTRACT_MIN_USER_MESSAGES = 3;   // Min substantial user messages to trigger
+export const AUTO_EXTRACT_MIN_MSG_LENGTH = 30;     // Min chars for a "substantial" message

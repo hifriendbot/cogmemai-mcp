@@ -27,6 +27,15 @@ Save memories when you learn something important:
 - Patterns and conventions used in the codebase (importance: 6-8)
 - Dependency versions and constraints (importance: 5-7)
 
+### After Significant Exchanges
+Use `extract_memories` after important conversations instead of manually saving each fact. It automatically identifies what's worth remembering:
+- After debugging a tricky bug — captures the root cause and fix
+- After discussing architecture — captures decisions and trade-offs
+- After the user explains their preferences — captures all stated preferences
+- After a planning session — captures key decisions and constraints
+
+This is faster and more thorough than manual `save_memory` calls for multi-fact exchanges.
+
 ### Session End
 When the session ends or the user says goodbye, save a session summary capturing what was accomplished, decisions made, and next steps.
 
@@ -114,7 +123,9 @@ When you need to find something specific from past sessions:
 - **Keep memories concise** — Complete sentences, 1-2 lines each. Not paragraphs.
 - **Use descriptive subjects** — "auth_system", "database_setup", "css_conventions" — not "note1"
 - **Save immediately** — Don't wait until the end of a session. Save as you learn.
+- **Use extract_memories for multi-fact exchanges** — When a conversation covers multiple important topics, use `extract_memories` instead of multiple `save_memory` calls. It's faster and catches facts you might miss.
 - **Update, don't duplicate** — Use `update_memory` to revise existing memories rather than creating duplicates. The system detects conflicts automatically.
+- **Use bulk_update for maintenance** — When cleaning up memory types, categories, or importance scores across many memories, use `bulk_update` instead of individual calls.
 - **Use tags** for grouping related memories across types (e.g., tag "auth" on architecture, bug, and decision memories about authentication)
 
 ## Common Mistakes
