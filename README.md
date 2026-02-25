@@ -8,14 +8,17 @@
 
 One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
 
-## What's New in v2.9
+## What's New in v3.0
 
-- **Smart recall** — relevant memories surface automatically as you switch topics, no manual searching needed
-- **Auto-learning** — CogmemAi learns from your sessions automatically, capturing important facts you might forget to save
-- **Memory consolidation** — clean up memory clutter by merging related memories into comprehensive summaries
-- **Bulk operations** — delete or update many memories at once for fast cleanup
-- **Enhanced metadata** — update memory type, category, subject, and tags on any memory
-- **Cross-project analytics** — view memory health dashboards across all your projects
+- **Task tracking** — save tasks that persist across sessions with status and priority, so you always pick up where you left off
+- **Correction learning** — teach Claude what went wrong and what's right, so mistakes aren't repeated
+- **Session reminders** — set nudges that surface automatically at the start of your next session
+- **Stale memory detection** — find outdated memories that need review or cleanup
+- **File change awareness** — see what files changed since your last session, powered by automatic git snapshots
+- **Smart recall** — relevant memories surface automatically as you switch topics
+- **Auto-learning** — CogmemAi learns from your sessions automatically
+- **Memory consolidation** — merge related memories into comprehensive summaries
+- **28 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
 
@@ -170,7 +173,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 21 tools that your Ai assistant uses automatically:
+CogmemAi provides 28 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -195,6 +198,13 @@ CogmemAi provides 21 tools that your Ai assistant uses automatically:
 | `get_analytics` | Memory health dashboard with insights (filterable by project) |
 | `promote_memory` | Promote a project memory to global scope |
 | `consolidate_memories` | Merge related memories into comprehensive summaries using Ai |
+| `save_task` | Create a persistent task with status and priority tracking |
+| `get_tasks` | Retrieve tasks for the current project — pick up where you left off |
+| `update_task` | Change task status, priority, or description as you work |
+| `save_correction` | Store a "wrong approach → right approach" pattern to avoid repeated mistakes |
+| `set_reminder` | Set a reminder that surfaces at the start of your next session |
+| `get_stale_memories` | Find memories that may be outdated for review or cleanup |
+| `get_file_changes` | See what files changed since your last session |
 
 ## SDKs
 
@@ -215,6 +225,9 @@ Memories are categorized for better organization and retrieval:
 - **dependency** — Version constraints, package notes
 - **pattern** — Reusable patterns, conventions
 - **context** — General project context
+- **task** — Persistent tasks with status and priority tracking
+- **correction** — Wrong approach → right approach patterns
+- **reminder** — Next-session nudges that auto-expire
 
 ## Scoping
 
