@@ -8,13 +8,14 @@
 
 One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
 
-## What's New in v2.7
+## What's New in v2.9
 
-- **Faster, more reliable** — improved network handling with automatic retries and smart timeouts
-- **Better error reporting** — clearer error messages when something goes wrong
-- **Hook resilience** — compaction recovery and session hooks are more robust, with automatic cleanup
-- **Error logging** — hook issues are logged to `~/.cogmemai/errors.log` for easy debugging
-- **Works with more editors** — verified compatibility with Claude Code, Cursor, Windsurf, Cline, and Continue
+- **Smart recall** — relevant memories surface automatically as you switch topics, no manual searching needed
+- **Auto-learning** — CogmemAi learns from your sessions automatically, capturing important facts you might forget to save
+- **Memory consolidation** — clean up memory clutter by merging related memories into comprehensive summaries
+- **Bulk operations** — delete or update many memories at once for fast cleanup
+- **Enhanced metadata** — update memory type, category, subject, and tags on any memory
+- **Cross-project analytics** — view memory health dashboards across all your projects
 
 ## Quick Start
 
@@ -169,7 +170,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 18 tools that your Ai assistant uses automatically:
+CogmemAi provides 21 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -177,9 +178,11 @@ CogmemAi provides 18 tools that your Ai assistant uses automatically:
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
 | `get_project_context` | Load top memories at session start (with smart ranking and compact mode) |
-| `list_memories` | Browse memories with filters (paginated) |
-| `update_memory` | Update a memory's content, importance, or scope |
+| `list_memories` | Browse memories with filters (paginated, with untyped filter) |
+| `update_memory` | Update content, importance, scope, type, category, subject, and tags |
 | `delete_memory` | Permanently delete a memory |
+| `bulk_delete` | Delete up to 100 memories at once |
+| `bulk_update` | Update up to 50 memories at once (content, type, category, tags, etc.) |
 | `get_usage` | Check your usage stats and tier info |
 | `export_memories` | Export all memories as JSON for backup or transfer |
 | `import_memories` | Bulk import memories from a JSON array |
@@ -189,8 +192,9 @@ CogmemAi provides 18 tools that your Ai assistant uses automatically:
 | `link_memories` | Connect related memories with named relationships |
 | `get_memory_links` | Explore the knowledge graph around a memory |
 | `get_memory_versions` | View edit history of a memory |
-| `get_analytics` | Memory health dashboard with insights |
+| `get_analytics` | Memory health dashboard with insights (filterable by project) |
 | `promote_memory` | Promote a project memory to global scope |
+| `consolidate_memories` | Merge related memories into comprehensive summaries using Ai |
 
 ## SDKs
 
