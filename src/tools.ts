@@ -1,11 +1,12 @@
 /**
- * CogmemAi MCP tool definitions — 21 tools for developer memory.
+ * CogmemAi MCP tool definitions — 28 tools for developer memory.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 import { api } from './api.js';
 import { detectProjectId } from './project.js';
 import { FLAG_DIR } from './config.js';
@@ -51,6 +52,20 @@ function cacheTopicIndex(projectId: string, topicIndex: unknown[]): void {
   } catch {
     // Non-critical — smart recall just won't work until next cache write
   }
+}
+
+/**
+ * Save current git state to a snapshot file for file-change tracking.
+ */
+function saveGitSnapshot(snapshotPath: string, branch: string, commit: string): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    writeFileSync(snapshotPath, JSON.stringify({
+      branch,
+      commit,
+      timestamp: Math.floor(Date.now() / 1000),
+    }));
+  } catch { /* non-critical */ }
 }
 
 function wrapError(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError: true } {
@@ -814,6 +829,459 @@ export function registerTools(server: McpServer): void {
 
         const result = await api('/cogmemai/consolidate', 'POST', body);
         return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 19. save_task ─────────────────────────────────────────
+
+  server.tool(
+    'save_task',
+    'Create a task that persists across sessions. Tasks are tracked with status (pending, in_progress, done, blocked) and priority (high, medium, low). Use this to maintain continuity on multi-session work.',
+    {
+      title: z
+        .string()
+        .min(3)
+        .max(200)
+        .describe('Short task title (e.g., "Fix auth bug in login flow")'),
+      description: z
+        .string()
+        .max(500)
+        .default('')
+        .describe('Detailed description of what needs to be done'),
+      priority: z
+        .enum(['high', 'medium', 'low'])
+        .default('medium')
+        .describe('Task priority'),
+      status: z
+        .enum(['pending', 'in_progress', 'done', 'blocked'])
+        .default('pending')
+        .describe('Initial task status'),
+    },
+    async ({ title, description, priority, status }) => {
+      try {
+        const projectId = detectProjectId();
+        const importance = priority === 'high' ? 9 : priority === 'medium' ? 7 : 5;
+        const content = description
+          ? `[${status.toUpperCase()}] ${title} — ${description}`
+          : `[${status.toUpperCase()}] ${title}`;
+
+        const result = await api('/cogmemai/store', 'POST', {
+          content,
+          memory_type: 'task',
+          category: 'tasks',
+          subject: title.slice(0, 100),
+          importance,
+          scope: 'project',
+          project_id: projectId,
+          tags: [`priority-${priority}`, `status-${status}`],
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 20. get_tasks ─────────────────────────────────────────
+
+  server.tool(
+    'get_tasks',
+    'Get tasks for the current project. Returns tasks filtered by status — defaults to showing pending and in_progress tasks. Use at session start to pick up where you left off.',
+    {
+      status: z
+        .enum(['pending', 'in_progress', 'done', 'blocked', 'all'])
+        .default('all')
+        .describe('Filter by task status. "all" returns pending + in_progress + blocked (excludes done).'),
+      include_done: z
+        .boolean()
+        .default(false)
+        .describe('When true, also include completed tasks'),
+    },
+    async ({ status, include_done }) => {
+      try {
+        const projectId = detectProjectId();
+        const params: Record<string, unknown> = {
+          limit: 50,
+          offset: 0,
+          project_id: projectId,
+          memory_type: 'task',
+        };
+
+        if (status !== 'all') {
+          params.tag = `status-${status}`;
+        }
+
+        const result = await api('/cogmemai/memories', 'GET', params) as {
+          memories?: Array<{ id: number; content: string; subject: string; tags?: string[]; importance: number; updated_at?: string; created_at: string }>;
+          total?: number;
+        };
+
+        // Format tasks for readability
+        const memories = result.memories || [];
+        const tasks = memories
+          .filter((m) => {
+            if (status === 'all' && !include_done) {
+              // Exclude done tasks unless requested
+              const tags = m.tags || [];
+              return !tags.includes('status-done');
+            }
+            return true;
+          })
+          .map((m) => {
+            const tags = m.tags || [];
+            const statusTag = tags.find((t) => t.startsWith('status-'));
+            const priorityTag = tags.find((t) => t.startsWith('priority-'));
+            return {
+              id: m.id,
+              title: m.subject || m.content.slice(0, 100),
+              description: m.content,
+              status: statusTag ? statusTag.replace('status-', '') : 'pending',
+              priority: priorityTag ? priorityTag.replace('priority-', '') : 'medium',
+              updated: m.updated_at || m.created_at,
+            };
+          });
+
+        return wrapResult({ tasks, total: tasks.length });
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 21. update_task ───────────────────────────────────────
+
+  server.tool(
+    'update_task',
+    'Update a task\'s status, title, description, or priority. Use this to mark tasks as in_progress, done, or blocked as you work.',
+    {
+      task_id: z.number().int().describe('The task memory ID (from get_tasks)'),
+      status: z
+        .enum(['pending', 'in_progress', 'done', 'blocked'])
+        .optional()
+        .describe('New status'),
+      title: z.string().min(3).max(200).optional().describe('New title'),
+      description: z.string().max(500).optional().describe('New description'),
+      priority: z
+        .enum(['high', 'medium', 'low'])
+        .optional()
+        .describe('New priority'),
+    },
+    async ({ task_id, status, title, description, priority }) => {
+      try {
+        const body: Record<string, unknown> = {};
+
+        // Build updated content if title or description changed
+        if (title !== undefined || description !== undefined || status !== undefined) {
+          // Fetch current task to get existing values
+          const current = await api(`/cogmemai/memories`, 'GET', {
+            limit: '1',
+            offset: '0',
+            memory_type: 'task',
+          }) as { memories?: Array<{ id: number; content: string; subject: string; tags?: string[] }> };
+
+          // We need to reconstruct content with new status prefix
+          const currentTask = current.memories?.find((m) => m.id === task_id);
+          const currentSubject = currentTask?.subject || '';
+          const currentContent = currentTask?.content || '';
+          const currentTags = currentTask?.tags || [];
+
+          const newTitle = title || currentSubject;
+          const newStatus = status || currentTags.find((t) => t.startsWith('status-'))?.replace('status-', '') || 'pending';
+
+          // Rebuild content with status prefix
+          if (description !== undefined) {
+            body.content = `[${newStatus.toUpperCase()}] ${newTitle} — ${description}`;
+          } else if (title !== undefined || status !== undefined) {
+            // Preserve existing description if present
+            const descMatch = currentContent.match(/^(?:\[[A-Z_]+\]\s*)?(?:.*?\s—\s)?(.*)$/);
+            const existingDesc = descMatch?.[1] || '';
+            body.content = existingDesc
+              ? `[${newStatus.toUpperCase()}] ${newTitle} — ${existingDesc}`
+              : `[${newStatus.toUpperCase()}] ${newTitle}`;
+          }
+
+          if (title !== undefined) body.subject = title.slice(0, 100);
+        }
+
+        // Build new tags
+        if (status !== undefined || priority !== undefined) {
+          // Fetch current tags to preserve non-status/priority ones
+          const currentMem = await api(`/cogmemai/memories`, 'GET', {
+            limit: '50',
+            offset: '0',
+            memory_type: 'task',
+          }) as { memories?: Array<{ id: number; tags?: string[] }> };
+
+          const task = currentMem.memories?.find((m) => m.id === task_id);
+          const oldTags = task?.tags || [];
+
+          const newTags = oldTags.filter((t) => !t.startsWith('status-') && !t.startsWith('priority-'));
+          if (status !== undefined) newTags.push(`status-${status}`);
+          else {
+            const existingStatus = oldTags.find((t) => t.startsWith('status-'));
+            if (existingStatus) newTags.push(existingStatus);
+          }
+          if (priority !== undefined) {
+            newTags.push(`priority-${priority}`);
+            body.importance = priority === 'high' ? 9 : priority === 'medium' ? 7 : 5;
+          } else {
+            const existingPriority = oldTags.find((t) => t.startsWith('priority-'));
+            if (existingPriority) newTags.push(existingPriority);
+          }
+          body.tags = newTags;
+        }
+
+        const result = await api(`/cogmemai/memory/${task_id}`, 'PATCH', body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 22. save_correction ───────────────────────────────────
+
+  server.tool(
+    'save_correction',
+    'Save a correction pattern — what went wrong and what the right approach is. These are surfaced automatically when similar situations arise in future sessions, helping avoid repeated mistakes.',
+    {
+      wrong_approach: z
+        .string()
+        .min(5)
+        .max(300)
+        .describe('What was done incorrectly (e.g., "Used npm install instead of bun add")'),
+      right_approach: z
+        .string()
+        .min(5)
+        .max(300)
+        .describe('The correct approach (e.g., "Always use bun add for this project")'),
+      context: z
+        .string()
+        .max(200)
+        .default('')
+        .describe('When/where this applies (e.g., "package management in monorepo")'),
+      scope: z
+        .enum(['global', 'project'])
+        .default('project')
+        .describe('global = applies everywhere, project = specific to this codebase'),
+    },
+    async ({ wrong_approach, right_approach, context, scope }) => {
+      try {
+        const projectId = detectProjectId();
+        const content = context
+          ? `WRONG: ${wrong_approach} → RIGHT: ${right_approach} (context: ${context})`
+          : `WRONG: ${wrong_approach} → RIGHT: ${right_approach}`;
+
+        const result = await api('/cogmemai/store', 'POST', {
+          content,
+          memory_type: 'correction',
+          category: 'corrections',
+          subject: context || 'general',
+          importance: 8,
+          scope,
+          project_id: projectId,
+          tags: ['correction'],
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 23. set_reminder ──────────────────────────────────────
+
+  server.tool(
+    'set_reminder',
+    'Set a reminder that surfaces automatically at the start of your next session. Use for follow-ups, things to check, or deferred work. Reminders auto-archive after being shown.',
+    {
+      content: z
+        .string()
+        .min(5)
+        .max(300)
+        .describe('What to remind about (e.g., "Check if PR #42 was merged")'),
+      ttl: z
+        .string()
+        .max(10)
+        .default('7d')
+        .describe('How long to keep the reminder alive. Format: "24h", "7d", "30d". Default: 7 days.'),
+    },
+    async ({ content, ttl }) => {
+      try {
+        const projectId = detectProjectId();
+        const result = await api('/cogmemai/store', 'POST', {
+          content: `REMINDER: ${content}`,
+          memory_type: 'reminder',
+          category: 'reminders',
+          subject: 'next_session',
+          importance: 8,
+          scope: 'project',
+          project_id: projectId,
+          tags: ['reminder', 'next-session'],
+          ttl,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 24. get_stale_memories ────────────────────────────────
+
+  server.tool(
+    'get_stale_memories',
+    'Find memories that may be outdated based on age and access patterns. Returns memories that haven\'t been recalled or updated recently, so you can review, update, or delete them.',
+    {
+      days_threshold: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .default(30)
+        .describe('Consider memories stale if not accessed in this many days (default: 30)'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(20)
+        .describe('Max results to return'),
+    },
+    async ({ days_threshold, limit }) => {
+      try {
+        const projectId = detectProjectId();
+        // Use analytics endpoint which already computes stale memories
+        const analytics = await api('/cogmemai/analytics', 'GET', {
+          project_id: projectId,
+        }) as { stale_memories?: Array<{ id: number; content: string; subject: string; memory_type: string; importance: number; updated_at?: string; created_at: string }> };
+
+        const stale = (analytics.stale_memories || []).slice(0, limit);
+
+        return wrapResult({
+          stale_memories: stale,
+          count: stale.length,
+          threshold_days: days_threshold,
+          tip: 'Review these memories — update if still relevant, delete if outdated.',
+        });
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 25. get_file_changes ──────────────────────────────────
+
+  server.tool(
+    'get_file_changes',
+    'Show what files changed since your last session. Compares the current git state to a snapshot saved when your previous session ended. Helps you understand what happened between sessions.',
+    {},
+    async () => {
+      try {
+        const projectId = detectProjectId();
+        const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+        const snapshotPath = join(FLAG_DIR, `git-snapshot-${safe}.json`);
+
+        // Get current git state
+        let currentBranch = '';
+        let currentCommit = '';
+        let currentStatus: string[] = [];
+
+        try {
+          currentBranch = execSync('git branch --show-current', {
+            encoding: 'utf-8',
+            timeout: 3000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).trim();
+        } catch { /* not a git repo */ }
+
+        try {
+          currentCommit = execSync('git rev-parse HEAD', {
+            encoding: 'utf-8',
+            timeout: 3000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).trim();
+        } catch { /* no commits */ }
+
+        try {
+          const statusOutput = execSync('git status --porcelain', {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).trim();
+          if (statusOutput) {
+            currentStatus = statusOutput.split('\n').map((l) => l.trim()).filter(Boolean);
+          }
+        } catch { /* git error */ }
+
+        // Load previous snapshot
+        if (!existsSync(snapshotPath)) {
+          // No previous snapshot — save current state for next time
+          saveGitSnapshot(snapshotPath, currentBranch, currentCommit);
+          return wrapResult({
+            message: 'No previous session snapshot found. Current state saved for next time.',
+            current: { branch: currentBranch, commit: currentCommit.slice(0, 8), uncommitted_files: currentStatus.length },
+          });
+        }
+
+        let snapshot: { branch: string; commit: string; timestamp: number };
+        try {
+          snapshot = JSON.parse(readFileSync(snapshotPath, 'utf-8'));
+        } catch {
+          saveGitSnapshot(snapshotPath, currentBranch, currentCommit);
+          return wrapResult({ message: 'Previous snapshot was corrupted. Current state saved.', current: { branch: currentBranch, commit: currentCommit.slice(0, 8) } });
+        }
+
+        // Compare
+        const changes: string[] = [];
+        if (snapshot.branch !== currentBranch) {
+          changes.push(`Branch changed: ${snapshot.branch} → ${currentBranch}`);
+        }
+
+        let commitsBetween: string[] = [];
+        if (snapshot.commit && currentCommit && snapshot.commit !== currentCommit) {
+          try {
+            const log = execSync(`git log --oneline ${snapshot.commit.slice(0, 8)}..HEAD`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+              stdio: ['pipe', 'pipe', 'pipe'],
+            }).trim();
+            if (log) {
+              commitsBetween = log.split('\n').filter(Boolean);
+            }
+          } catch { /* range may not exist */ }
+
+          // Files changed between commits
+          try {
+            const diffStat = execSync(`git diff --stat ${snapshot.commit.slice(0, 8)}..HEAD`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+              stdio: ['pipe', 'pipe', 'pipe'],
+            }).trim();
+            if (diffStat) {
+              changes.push(`Files changed since last session:\n${diffStat}`);
+            }
+          } catch { /* diff error */ }
+        }
+
+        // Save new snapshot for next session
+        saveGitSnapshot(snapshotPath, currentBranch, currentCommit);
+
+        const sessionAge = snapshot.timestamp
+          ? Math.floor((Date.now() / 1000 - snapshot.timestamp) / 3600)
+          : null;
+
+        return wrapResult({
+          hours_since_last_session: sessionAge,
+          previous: { branch: snapshot.branch, commit: snapshot.commit?.slice(0, 8) },
+          current: { branch: currentBranch, commit: currentCommit.slice(0, 8) },
+          new_commits: commitsBetween,
+          uncommitted_files: currentStatus,
+          summary: changes.length > 0 ? changes : ['No changes since last session'],
+        });
       } catch (error) {
         return wrapError(error);
       }

@@ -1327,6 +1327,13 @@ export async function runHookStop(): Promise<void> {
     } catch (err) {
       logHookError('auto-extract', err);
     }
+
+    // Save git snapshot for file-change tracking across sessions
+    try {
+      saveGitSnapshotForHook(hookInput.cwd);
+    } catch (err) {
+      logHookError('git-snapshot', err);
+    }
   } catch (err) {
     logHookError('stop', err);
     // Never fail — don't interfere with Claude stopping
@@ -1334,6 +1341,36 @@ export async function runHookStop(): Promise<void> {
 
   // Output empty JSON to allow Claude to stop
   console.log(JSON.stringify({}));
+}
+
+/**
+ * Save git snapshot at session end for file-change tracking.
+ */
+function saveGitSnapshotForHook(cwd: string): void {
+  const projectId = detectProjectIdForHook(cwd);
+  const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  const snapshotPath = join(FLAG_DIR, `git-snapshot-${safe}.json`);
+
+  let branch = '';
+  let commit = '';
+  const execOpts = { encoding: 'utf-8' as const, timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] as ['pipe', 'pipe', 'pipe'], cwd: cwd || undefined };
+
+  try {
+    branch = execSync('git branch --show-current', execOpts).trim();
+  } catch { /* not a git repo */ }
+
+  try {
+    commit = execSync('git rev-parse HEAD', execOpts).trim();
+  } catch { /* no commits */ }
+
+  if (branch || commit) {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    writeFileSync(snapshotPath, JSON.stringify({
+      branch,
+      commit,
+      timestamp: Math.floor(Date.now() / 1000),
+    }));
+  }
 }
 
 // ── Auto-Ingest Documents ────────────────────────────────────
