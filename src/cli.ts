@@ -874,7 +874,7 @@ export async function runHookContextReload(): Promise<void> {
  * This runs on the fast-exit path (existing session, no compaction).
  * It reads the user's latest message, matches against the cached topic
  * index, and if a new topic is detected, calls the lightweight
- * smart-recall endpoint for FULLTEXT-based memory retrieval.
+ * smart-recall endpoint for fast memory retrieval.
  */
 async function trySmartRecall(
   hookInput: { session_id: string; transcript_path: string; cwd: string },
