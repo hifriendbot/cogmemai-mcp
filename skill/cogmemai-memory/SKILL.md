@@ -76,6 +76,10 @@ Choose the right type for better retrieval:
 - **dependency** — Version constraints, package notes
 - **pattern** — Reusable patterns, conventions
 - **context** — General project context
+- **session_summary** — What was accomplished in a session
+- **task** — Persistent tasks with status and priority tracking
+- **correction** — Wrong approach to right approach patterns
+- **reminder** — Next-session nudges that auto-expire
 
 ## Scoping
 
@@ -98,11 +102,24 @@ When starting work on a new project for the first time:
 ### Memory Health Check
 Periodically (or when the user asks), review memory quality:
 
-1. Call `get_analytics` to see usage patterns
-2. Review "never recalled" memories — delete ones that aren't useful
-3. Check for duplicate or contradictory memories
-4. Use `link_memories` to connect related facts
-5. Update importance scores based on actual usage
+1. Check the `health_score` from `get_project_context` — a 0-100 score showing overall memory health
+2. Call `get_analytics` to see usage patterns — it automatically tunes importance and archives stale memories
+3. Review "never recalled" memories — delete ones that aren't useful
+4. Use `consolidate_memories` to merge related facts into comprehensive summaries
+5. Use `link_memories` to connect related facts
+6. Use `get_stale_memories` to find outdated memories that need review
+
+### Task Tracking
+Use tasks for work that spans multiple sessions:
+
+1. `save_task` to create a task with status (todo, in_progress, done, blocked) and priority
+2. `get_tasks` at session start to see what's pending
+3. `update_task` as you make progress
+4. Tasks persist across sessions and compaction — nothing gets lost
+
+### Corrections and Reminders
+- Use `save_correction` when you discover a wrong approach — stores the wrong-to-right pattern so the mistake isn't repeated
+- Use `set_reminder` to surface a nudge at the start of the next session (auto-expires after delivery)
 
 ### Context Recovery After Compaction
 When Claude Code compacts your context (you'll see a summary of the previous conversation):
@@ -116,7 +133,7 @@ When you need to find something specific from past sessions:
 
 1. Use `recall_memories` with a natural language query
 2. Filter by `memory_type` or `category` if you know the type
-3. Results are ranked by semantic relevance, importance, and recency
+3. Results are intelligently ranked for maximum relevance
 
 ## Best Practices
 

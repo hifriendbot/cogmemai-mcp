@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.0.0';
+export const VERSION = '3.0.7';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -34,11 +34,11 @@ export const RETRY_CONFIG = {
 
 // Stop hook / auto-summary configuration
 export const SUMMARY_CONFIG = {
-  minTranscriptLines: 8,
-  minUserMessages: 2,
+  minTranscriptLines: 4,
+  minUserMessages: 1,
   maxSummaryChars: 2000,
   hookTimeoutSeconds: 20,
-  cooldownSeconds: 1800, // 30 minutes between saves for same session
+  cooldownSeconds: 900, // 15 minutes between saves for same session
 } as const;
 
 // Smart recall — proactive mid-session memory injection on topic shift
@@ -48,6 +48,6 @@ export const SMART_RECALL_MIN_MSG_LENGTH = 30;   // Min user message length to t
 export const SMART_RECALL_MIN_MATCH_SCORE = 2;   // Min keyword matches to trigger recall
 
 // Auto-extract — learn from every session automatically
-export const AUTO_EXTRACT_COOLDOWN = 7200;         // 2 hours between auto-extractions (global)
-export const AUTO_EXTRACT_MIN_USER_MESSAGES = 3;   // Min substantial user messages to trigger
+export const AUTO_EXTRACT_COOLDOWN = 1800;         // 30 minutes between auto-extractions (global)
+export const AUTO_EXTRACT_MIN_USER_MESSAGES = 2;   // Min substantial user messages to trigger
 export const AUTO_EXTRACT_MIN_MSG_LENGTH = 30;     // Min chars for a "substantial" message

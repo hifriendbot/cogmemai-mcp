@@ -677,6 +677,16 @@ function matchTopics(
 
   for (const topic of topicIndex) {
     let matchCount = 0;
+
+    // Check if any keyword matches the subject name or prefix
+    const subjectLower = topic.subject.toLowerCase();
+    for (const kw of keywords) {
+      if (subjectLower === kw || subjectLower.startsWith(kw + '_') || subjectLower.startsWith(kw + '-')) {
+        matchCount += 2; // Strong signal: keyword matches subject directly
+        break;
+      }
+    }
+
     for (const kw of keywords) {
       for (const topicKw of topic.keywords) {
         // Exact match or substring (e.g., "stripe" matches "stripe")
@@ -816,6 +826,9 @@ export async function runHookContextReload(): Promise<void> {
       total_count?: number;
       project_memories?: Array<{ content: string; subject: string; importance: number }>;
       global_memories?: Array<{ content: string; subject: string; importance: number }>;
+      recalls_total?: number;
+      last_session?: string | null;
+      health_score?: { score: number; factors: string[] };
     };
 
     // Build context string
@@ -837,7 +850,28 @@ export async function runHookContextReload(): Promise<void> {
       context = parts.join('\n');
     }
 
-    if (!context || (data.total_count !== undefined && data.total_count === 0)) return;
+    // New project with no memories — suggest README ingestion
+    if (!context || (data.total_count !== undefined && data.total_count === 0)) {
+      // Check if README exists in cwd
+      const readmeCandidates = ['README.md', 'readme.md', 'README.rst', 'README.txt'];
+      let readmeFound = '';
+      for (const name of readmeCandidates) {
+        const readmePath = join(hookInput.cwd, name);
+        if (existsSync(readmePath)) {
+          readmeFound = name;
+          break;
+        }
+      }
+
+      if (readmeFound) {
+        const output = JSON.stringify({
+          result: 'success',
+          additionalContext: `CogmemAi — New project detected with no memories yet. Found ${readmeFound} in the project root. Consider running ingest_document to quickly build project context from it. You can also save_memory to start building your knowledge base.`,
+        });
+        process.stdout.write(output);
+      }
+      return;
+    }
 
     // Cap context size to prevent bloating the conversation after compaction
     const maxChars = isPostCompaction ? 4000 : 6000;
@@ -850,11 +884,28 @@ export async function runHookContextReload(): Promise<void> {
       ? 'CogmemAi — Context recovered after compaction.'
       : 'CogmemAi — Project context loaded from previous sessions.';
 
+    // Build session replay + stats footer
+    const extras: string[] = [];
+
+    if (data.last_session && !isPostCompaction) {
+      extras.push(`\n**Last session:** ${data.last_session}`);
+    }
+
+    if (data.recalls_total && data.recalls_total > 0) {
+      extras.push(`CogmemAi has surfaced memories ${data.recalls_total} times for you.`);
+    }
+
+    if (data.health_score) {
+      const h = data.health_score;
+      extras.push(`Memory health: ${h.score}/100${h.factors.length > 0 ? ' — ' + h.factors[0] : ''}`);
+    }
+
+    const statsLine = extras.length > 0 ? '\n\n' + extras.join(' | ') : '';
     const instruction = '\n\nIMPORTANT: Your memories are loaded above. Use recall_memories to search for specific past context. Save new learnings with save_memory.';
 
     const output = JSON.stringify({
       result: 'success',
-      additionalContext: `${label} Your memories have been reloaded:\n\n${context}${instruction}`,
+      additionalContext: `${label} Your memories have been reloaded:\n\n${context}${statsLine}${instruction}`,
     });
 
     // Use console.log for reliable stdout flushing (adds newline, auto-flushes)
@@ -973,17 +1024,18 @@ async function trySmartRecall(
   if (!res.ok) return;
 
   const data = await res.json() as {
-    memories?: Array<{ content: string; subject: string; importance: number; memory_type: string }>;
+    memories?: Array<{ id?: number; content: string; subject: string; importance: number; memory_type: string }>;
     matched_topics?: string[];
   };
 
   if (!data.memories || data.memories.length === 0) return;
 
-  // Build injection text
+  // Build injection text (with memory IDs for easy reference)
   const lines: string[] = [];
   for (const m of data.memories) {
     const label = m.memory_type || 'context';
-    lines.push(`- [${label}] ${m.subject}: ${m.content}`);
+    const idTag = m.id ? `[#${m.id}] ` : '';
+    lines.push(`- ${idTag}[${label}] ${m.subject}: ${m.content}`);
   }
 
   let injection = lines.join('\n');

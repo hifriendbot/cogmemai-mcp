@@ -8,16 +8,20 @@
 
 One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
 
-## What's New in v3.0
+## What's New in v3
 
-- **Task tracking** — save tasks that persist across sessions with status and priority, so you always pick up where you left off
+- **Memory health score** — see how healthy your memory system is at a glance with a 0-100 score and actionable factors
+- **Session replay** — pick up exactly where you left off with automatic session summaries loaded at startup
+- **Self-tuning memory** — memories automatically adjust importance based on real usage; stale memories auto-archive
+- **Auto-ingest README** — when you start a new project, CogmemAi offers to learn from your README instantly
+- **Smart recall** — relevant memories surface automatically as you switch topics mid-session
+- **Auto-learning** — CogmemAi learns from your sessions automatically, no manual saving needed
+- **Task tracking** — save tasks that persist across sessions with status and priority
 - **Correction learning** — teach Claude what went wrong and what's right, so mistakes aren't repeated
 - **Session reminders** — set nudges that surface automatically at the start of your next session
 - **Stale memory detection** — find outdated memories that need review or cleanup
-- **File change awareness** — see what files changed since your last session, powered by automatic git snapshots
-- **Smart recall** — relevant memories surface automatically as you switch topics
-- **Auto-learning** — CogmemAi learns from your sessions automatically
-- **Memory consolidation** — merge related memories into comprehensive summaries
+- **File change awareness** — see what files changed since your last session
+- **Memory consolidation** — merge related memories into comprehensive summaries using Ai
 - **28 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
@@ -42,7 +46,7 @@ CogmemAi gives Claude Code a real memory system:
 - **Privacy controls** — auto-detects API keys, tokens, and secrets before storing
 - **Document ingestion** — feed in READMEs and docs to instantly build project context
 - **Project scoping** — memories tied to specific repos, plus global preferences that follow you everywhere
-- **Smart context** — blends importance, semantic relevance, and recency for optimal retrieval
+- **Smart context** — intelligently ranked for maximum relevance to your current work
 - **Compaction recovery** — survives Claude Code context compaction automatically
 - **Token-efficient** — compact context loading that won't bloat your conversation
 - **Zero setup** — no databases, no Docker, no Python, no vector stores
@@ -180,7 +184,7 @@ CogmemAi provides 28 tools that your Ai assistant uses automatically:
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
-| `get_project_context` | Load top memories at session start (with smart ranking and compact mode) |
+| `get_project_context` | Load top memories at session start (with smart ranking, health score, and session replay) |
 | `list_memories` | Browse memories with filters (paginated, with untyped filter) |
 | `update_memory` | Update content, importance, scope, type, category, subject, and tags |
 | `delete_memory` | Permanently delete a memory |
@@ -195,7 +199,7 @@ CogmemAi provides 28 tools that your Ai assistant uses automatically:
 | `link_memories` | Connect related memories with named relationships |
 | `get_memory_links` | Explore the knowledge graph around a memory |
 | `get_memory_versions` | View edit history of a memory |
-| `get_analytics` | Memory health dashboard with insights (filterable by project) |
+| `get_analytics` | Memory health dashboard with self-tuning insights (filterable by project) |
 | `promote_memory` | Promote a project memory to global scope |
 | `consolidate_memories` | Merge related memories into comprehensive summaries using Ai |
 | `save_task` | Create a persistent task with status and priority tracking |
@@ -231,7 +235,7 @@ Memories are categorized for better organization and retrieval:
 
 ## Scoping
 
-- **Project memories** — Architecture, decisions, bugs specific to one repo. Auto-detected from `git remote`.
+- **Project memories** — Architecture, decisions, bugs specific to one repo. Auto-detected from your repository.
 - **Global memories** — Your coding preferences, identity, tool choices. Available in every project.
 
 ## Pricing
@@ -239,7 +243,7 @@ Memories are categorized for better organization and retrieval:
 | | Free | Pro | Team | Enterprise |
 |---|---|---|---|---|
 | **Price** | $0 | $14.99/mo | $39.99/mo | $99.99/mo |
-| **Memories** | 1,000 | 2,000 | 10,000 | 50,000 |
+| **Memories** | 500 | 2,000 | 10,000 | 50,000 |
 | **Extractions/mo** | 500 | 2,000 | 5,000 | 20,000 |
 | **Projects** | 5 | 20 | 50 | 200 |
 
@@ -248,7 +252,7 @@ Start free. Upgrade when you need more.
 ## Privacy & Security
 
 - **No source code leaves your machine.** We store extracted facts (short sentences), never raw code.
-- **API keys hashed** with SHA-256 (irreversible) server-side.
+- **API keys cryptographically hashed** (irreversible) server-side.
 - **All traffic over HTTPS.**
 - **No model training** on your data. Ever.
 - **Delete everything** instantly via dashboard or MCP tool.

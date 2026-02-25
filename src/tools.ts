@@ -24,12 +24,15 @@ const MEMORY_TYPES = [
 
 // Session tracking: detect if get_project_context was called
 let contextLoaded = false;
+let toolCallCount = 0;
+const MAX_REMINDER_CALLS = 3; // Stop nagging after this many tool calls
 
 const CONTEXT_REMINDER = '\n\n[!] REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
 
 function wrapResult(result: unknown, skipReminder = false): { content: Array<{ type: 'text'; text: string }> } {
   let text = JSON.stringify(result, null, 2);
-  if (!contextLoaded && !skipReminder) {
+  toolCallCount++;
+  if (!contextLoaded && !skipReminder && toolCallCount <= MAX_REMINDER_CALLS) {
     text += CONTEXT_REMINDER;
   }
   return { content: [{ type: 'text' as const, text }] };
@@ -318,10 +321,14 @@ export function registerTools(server: McpServer): void {
         }
 
         if (compact) {
-          return wrapResult({
+          const compactResult: Record<string, unknown> = {
             formatted_context: result.formatted_context || '',
             total_count: result.total_count || 0,
-          }, true);
+          };
+          if (result.recalls_total) compactResult.recalls_total = result.recalls_total;
+          if (result.last_session) compactResult.last_session = result.last_session;
+          if (result.health_score) compactResult.health_score = result.health_score;
+          return wrapResult(compactResult, true);
         }
         // Strip topic_index from full response (internal use only)
         const { topic_index: _ti, ...clientResult } = result;
@@ -372,21 +379,29 @@ export function registerTools(server: McpServer): void {
         .boolean()
         .optional()
         .describe('When true, only return memories with no memory_type set'),
+      sort_by: z
+        .enum(['importance', 'updated', 'created', 'referenced', 'least_used'])
+        .default('importance')
+        .describe('Sort order: importance (default), updated, created, referenced (most used first), least_used'),
     },
-    async ({ memory_type, category, importance_min, scope, limit, tag, offset, untyped }) => {
+    async ({ memory_type, category, importance_min, scope, limit, tag, offset, untyped, sort_by }) => {
       try {
         const projectId = detectProjectId();
         const params: Record<string, unknown> = {
           limit,
           offset,
-          project_id: projectId,
         };
+        // Don't send project_id when filtering for global scope (globals have project_id = NULL)
+        if (scope !== 'global') {
+          params.project_id = projectId;
+        }
         if (memory_type) params.memory_type = memory_type;
         if (category) params.category = category;
         if (importance_min) params.importance_min = importance_min;
         if (scope && scope !== 'all') params.scope = scope;
         if (tag) params.tag = tag;
         if (untyped) params.untyped = 'true';
+        if (sort_by && sort_by !== 'importance') params.sort_by = sort_by;
 
         const result = await api('/cogmemai/memories', 'GET', params);
         return wrapResult(result);
@@ -1154,17 +1169,14 @@ export function registerTools(server: McpServer): void {
     async ({ days_threshold, limit }) => {
       try {
         const projectId = detectProjectId();
-        // Use analytics endpoint which already computes stale memories
-        const analytics = await api('/cogmemai/analytics', 'GET', {
+        const result = await api('/cogmemai/stale', 'GET', {
           project_id: projectId,
-        }) as { stale_memories?: Array<{ id: number; content: string; subject: string; memory_type: string; importance: number; updated_at?: string; created_at: string }> };
-
-        const stale = (analytics.stale_memories || []).slice(0, limit);
+          days_threshold,
+          limit,
+        }) as Record<string, unknown>;
 
         return wrapResult({
-          stale_memories: stale,
-          count: stale.length,
-          threshold_days: days_threshold,
+          ...result,
           tip: 'Review these memories — update if still relevant, delete if outdated.',
         });
       } catch (error) {
