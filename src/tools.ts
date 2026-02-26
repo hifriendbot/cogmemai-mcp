@@ -117,7 +117,7 @@ export function registerTools(server: McpServer): void {
         .describe(
           'What this is about, e.g. "auth_system", "react_version", "tab_width"'
         ),
-      importance: z
+      importance: z.coerce
         .number()
         .int()
         .min(1)
@@ -182,7 +182,7 @@ export function registerTools(server: McpServer): void {
         .enum(['global', 'project', 'all'])
         .default('all')
         .describe('Filter by scope'),
-      limit: z
+      limit: z.coerce
         .number()
         .int()
         .min(1)
@@ -195,7 +195,7 @@ export function registerTools(server: McpServer): void {
         .max(50)
         .optional()
         .describe('Filter by category (e.g., "backend", "frontend", or any custom category)'),
-      importance_min: z
+      importance_min: z.coerce
         .number()
         .int()
         .min(1)
@@ -294,7 +294,7 @@ export function registerTools(server: McpServer): void {
         .boolean()
         .default(true)
         .describe('When true (default), returns only formatted_context text instead of full JSON arrays. Saves ~60% tokens.'),
-      limit: z
+      limit: z.coerce
         .number()
         .int()
         .min(5)
@@ -351,7 +351,7 @@ export function registerTools(server: McpServer): void {
         .max(50)
         .optional()
         .describe('Filter by category (e.g., "backend", "frontend", or any custom category)'),
-      importance_min: z
+      importance_min: z.coerce
         .number()
         .int()
         .min(1)
@@ -362,7 +362,7 @@ export function registerTools(server: McpServer): void {
         .enum(['global', 'project', 'all'])
         .default('all')
         .describe('Filter by scope'),
-      limit: z
+      limit: z.coerce
         .number()
         .int()
         .min(1)
@@ -442,7 +442,7 @@ export function registerTools(server: McpServer): void {
         .max(500)
         .optional()
         .describe('New content'),
-      importance: z
+      importance: z.coerce
         .number()
         .int()
         .min(1)
@@ -1151,14 +1151,14 @@ export function registerTools(server: McpServer): void {
     'get_stale_memories',
     'Find memories that may be outdated based on age and access patterns. Returns memories that haven\'t been recalled or updated recently, so you can review, update, or delete them.',
     {
-      days_threshold: z
+      days_threshold: z.coerce
         .number()
         .int()
         .min(1)
         .max(365)
         .default(30)
         .describe('Consider memories stale if not accessed in this many days (default: 30)'),
-      limit: z
+      limit: z.coerce
         .number()
         .int()
         .min(1)
