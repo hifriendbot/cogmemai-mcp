@@ -2,6 +2,9 @@
   <img src="assets/hero.png" alt="CogmemAi — Why Claude Code Forgets Everything (And How to Fix It)" width="800">
 </p>
 
+[![npm version](https://img.shields.io/npm/v/cogmemai-mcp)](https://www.npmjs.com/package/cogmemai-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 # CogmemAi — Cognitive Memory for Claude Code
 
 **Claude Code forgets everything between sessions. CogmemAi fixes that.**

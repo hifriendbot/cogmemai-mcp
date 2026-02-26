@@ -374,7 +374,7 @@ export function registerTools(server: McpServer): void {
         .max(30)
         .optional()
         .describe('Filter by tag (e.g., "marketing-campaign")'),
-      offset: z.number().int().default(0).describe('Pagination offset'),
+      offset: z.coerce.number().int().default(0).describe('Pagination offset'),
       untyped: z
         .boolean()
         .optional()
@@ -417,7 +417,7 @@ export function registerTools(server: McpServer): void {
     'delete_memory',
     'Delete a specific memory by its ID. This is permanent.',
     {
-      memory_id: z.number().int().describe('Memory ID to delete'),
+      memory_id: z.coerce.number().int().describe('Memory ID to delete'),
     },
     async ({ memory_id }) => {
       try {
@@ -435,7 +435,7 @@ export function registerTools(server: McpServer): void {
     'update_memory',
     "Update an existing memory's content, importance, or scope.",
     {
-      memory_id: z.number().int().describe('Memory ID to update'),
+      memory_id: z.coerce.number().int().describe('Memory ID to update'),
       content: z
         .string()
         .min(5)
@@ -499,7 +499,7 @@ export function registerTools(server: McpServer): void {
     'Delete multiple memories at once by their IDs. Maximum 100 IDs per call. This is permanent.',
     {
       ids: z
-        .array(z.number().int())
+        .array(z.coerce.number().int())
         .min(1)
         .max(100)
         .describe('Array of memory IDs to delete (max 100)'),
@@ -523,9 +523,9 @@ export function registerTools(server: McpServer): void {
       updates: z
         .array(
           z.object({
-            memory_id: z.number().int().describe('Memory ID to update'),
+            memory_id: z.coerce.number().int().describe('Memory ID to update'),
             content: z.string().min(5).max(500).optional().describe('New content'),
-            importance: z.number().int().min(1).max(10).optional().describe('New importance'),
+            importance: z.coerce.number().int().min(1).max(10).optional().describe('New importance'),
             scope: z.enum(['global', 'project']).optional().describe('New scope'),
             memory_type: z.enum(MEMORY_TYPES).optional().describe('New memory type'),
             category: z.string().max(50).optional().describe('New category'),
@@ -703,8 +703,8 @@ export function registerTools(server: McpServer): void {
     'link_memories',
     'Connect two related memories with a named relationship. Use this to build a knowledge graph — e.g., linking a bug fix to the architecture decision that caused it, or connecting a preference to the pattern it led to.',
     {
-      memory_id: z.number().int().describe('The source memory ID'),
-      related_memory_id: z.number().int().describe('The target memory ID to link to'),
+      memory_id: z.coerce.number().int().describe('The source memory ID'),
+      related_memory_id: z.coerce.number().int().describe('The target memory ID to link to'),
       relationship: z
         .enum(['led_to', 'contradicts', 'extends', 'related'])
         .describe(
@@ -730,7 +730,7 @@ export function registerTools(server: McpServer): void {
     'get_memory_links',
     'View all memories linked to a specific memory. Returns the relationship type and full memory details for each connection. Use this to explore the knowledge graph around a memory.',
     {
-      memory_id: z.number().int().describe('The memory ID to get links for'),
+      memory_id: z.coerce.number().int().describe('The memory ID to get links for'),
     },
     async ({ memory_id }) => {
       try {
@@ -748,7 +748,7 @@ export function registerTools(server: McpServer): void {
     'get_memory_versions',
     'View the edit history of a memory. Shows all previous versions with timestamps and what changed. Useful for understanding how a decision or fact evolved over time.',
     {
-      memory_id: z.number().int().describe('The memory ID to get version history for'),
+      memory_id: z.coerce.number().int().describe('The memory ID to get version history for'),
     },
     async ({ memory_id }) => {
       try {
@@ -794,7 +794,7 @@ export function registerTools(server: McpServer): void {
     'promote_memory',
     'Promote a project-scoped memory to global scope so it applies across all projects. Use this when you discover a preference or pattern that should be universal — e.g., "user prefers tabs over spaces" or "always use Bun instead of npm".',
     {
-      memory_id: z.number().int().describe('The project memory ID to promote to global scope'),
+      memory_id: z.coerce.number().int().describe('The project memory ID to promote to global scope'),
     },
     async ({ memory_id }) => {
       try {
@@ -972,7 +972,7 @@ export function registerTools(server: McpServer): void {
     'update_task',
     'Update a task\'s status, title, description, or priority. Use this to mark tasks as in_progress, done, or blocked as you work.',
     {
-      task_id: z.number().int().describe('The task memory ID (from get_tasks)'),
+      task_id: z.coerce.number().int().describe('The task memory ID (from get_tasks)'),
       status: z
         .enum(['pending', 'in_progress', 'done', 'blocked'])
         .optional()
