@@ -7,6 +7,10 @@
 
 # CogmemAi — Cognitive Memory for Claude Code
 
+<p align="center">
+  <img src="assets/demo.svg" alt="CogmemAi demo — Claude Code remembers your project across sessions" width="800">
+</p>
+
 **Claude Code forgets everything between sessions. CogmemAi fixes that.**
 
 One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
