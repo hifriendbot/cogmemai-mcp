@@ -1,8 +1,8 @@
 {
   "name": "cogmemai-mcp",
-  "version": "3.0.9",
+  "version": "3.1.0",
   "mcpName": "io.github.hifriendbot/cogmemai",
-  "description": "CogmemAi — Cognitive Memory for Claude Code. Persistent memory across sessions for developers.",
+  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. Persistent cloud memory across sessions. Works with Claude Code, Cursor, Windsurf, Cline, and Continue. Perfect for teams.",
   "type": "module",
   "main": "build/index.js",
   "bin": {

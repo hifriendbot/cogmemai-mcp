@@ -5,15 +5,15 @@
 [![npm version](https://img.shields.io/npm/v/cogmemai-mcp)](https://www.npmjs.com/package/cogmemai-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-# CogmemAi — Cognitive Memory for Claude Code
+# CogmemAi — Cognitive Memory for Ai Coding Assistants
 
 <p align="center">
-  <img src="assets/demo.svg" alt="CogmemAi demo — Claude Code remembers your project across sessions" width="800">
+  <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-**Claude Code forgets everything between sessions. CogmemAi fixes that.**
+**Your Ai coding assistant forgets everything between sessions. CogmemAi fixes that.**
 
-One command. Claude Code remembers your architecture, patterns, decisions, bugs, and preferences — permanently.
+One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool.
 
 ## What's New in v3
 
@@ -24,7 +24,7 @@ One command. Claude Code remembers your architecture, patterns, decisions, bugs,
 - **Smart recall** — relevant memories surface automatically as you switch topics mid-session
 - **Auto-learning** — CogmemAi learns from your sessions automatically, no manual saving needed
 - **Task tracking** — save tasks that persist across sessions with status and priority
-- **Correction learning** — teach Claude what went wrong and what's right, so mistakes aren't repeated
+- **Correction learning** — teach your assistant what went wrong and what's right, so mistakes aren't repeated
 - **Session reminders** — set nudges that surface automatically at the start of your next session
 - **Stale memory detection** — find outdated memories that need review or cleanup
 - **File change awareness** — see what files changed since your last session
@@ -43,9 +43,9 @@ Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://h
 
 ## The Problem
 
-Every time you start a new Claude Code session, you lose context. You re-explain your tech stack, your architecture decisions, your coding preferences. Claude Code's built-in memory is a flat file with no search, no structure, and no intelligence.
+Every time you start a new session, you lose context. You re-explain your tech stack, your architecture decisions, your coding preferences. Built-in memory in tools like Claude Code is a flat file with no search, no structure, and no intelligence.
 
-CogmemAi gives Claude Code a real memory system:
+CogmemAi gives your Ai assistant a real memory system:
 
 - **Semantic search** — finds relevant memories by meaning, not keywords
 - **Ai-powered extraction** — automatically identifies facts worth remembering from your conversations
@@ -62,9 +62,11 @@ CogmemAi gives Claude Code a real memory system:
 
 Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.**
 
+**Teams and collaboration.** Cloud memory is the only way to share project knowledge across teammates. When one developer saves an architecture decision or documents a bug fix, every team member's Ai assistant knows about it instantly. No syncing, no merge conflicts, no stale local databases. Whether it's two developers or twenty, everyone's assistant has the same up-to-date context. This is impossible with local-only memory solutions.
+
 ## Compaction Recovery
 
-When Claude Code compacts your context, conversation history gets compressed and context is lost. CogmemAi handles this automatically — your context is preserved before compaction and seamlessly restored afterward. No re-explaining, no manual prompting.
+When your Ai assistant compacts your context, conversation history gets compressed and context is lost. CogmemAi handles this automatically — your context is preserved before compaction and seamlessly restored afterward. No re-explaining, no manual prompting.
 
 The `npx cogmemai-mcp setup` command configures everything automatically.
 
