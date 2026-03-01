@@ -13,7 +13,7 @@
 
 **Your Ai coding assistant forgets everything between sessions. CogmemAi fixes that.**
 
-One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool.
+One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
 ## What's New in v3
 
@@ -61,6 +61,8 @@ CogmemAi gives your Ai assistant a real memory system:
 ## Why Cloud Memory?
 
 Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.**
+
+**Your memory follows you everywhere.** Memories created in Claude Code are instantly available in Cursor, Windsurf, Cline, and any MCP-compatible tool. Switch between Opus, Sonnet, Haiku, or any model your editor supports — your memories persist regardless. New laptop? New OS? Log in and your full project knowledge is waiting. A local SQLite file dies with your machine. Cloud memory is permanent.
 
 **Teams and collaboration.** Cloud memory is the only way to share project knowledge across teammates. When one developer saves an architecture decision or documents a bug fix, every team member's Ai assistant knows about it instantly. No syncing, no merge conflicts, no stale local databases. Whether it's two developers or twenty, everyone's assistant has the same up-to-date context. This is impossible with local-only memory solutions.
 
