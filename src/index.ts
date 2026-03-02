@@ -84,7 +84,7 @@ compaction or session restart. This is what makes you remember — never skip it
 - When you fix a bug or discover a gotcha, save it so you remember next time.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
 
-## What to Save
+## What to Save (with importance guidelines)
 - Architecture decisions and tech stack details (importance: 8-10)
 - User preferences for coding style, tools, workflow (importance: 7-9)
 - Bug fixes, gotchas, and workarounds (importance: 6-8)
@@ -92,16 +92,89 @@ compaction or session restart. This is what makes you remember — never skip it
 - Dependency versions and constraints (importance: 5-7)
 - Patterns and conventions used in the codebase (importance: 6-8)
 
+## Memory Types
+Use the right type for better organization and retrieval:
+- **identity** — Who the user is, their role, team
+- **preference** — Coding style, tool choices, conventions
+- **architecture** — System design, tech stack, file structure
+- **decision** — Why X was chosen over Y
+- **bug** — Known issues, fixes, workarounds
+- **dependency** — Version constraints, package notes
+- **pattern** — Reusable patterns, conventions
+- **context** — General project context
+
+## Categories
+Organize memories by domain: frontend, backend, database, devops, testing, security, performance, tooling, api, general. Custom categories are also accepted.
+
 ## Scoping
 - Use scope "project" for things specific to this codebase (default)
 - Use scope "global" for user preferences and identity that apply everywhere
+- Use promote_memory to upgrade a project memory to global when you discover it applies everywhere
+
+## Task Tracking
+Track work across sessions with persistent tasks:
+- save_task — Create a task with title, description, status (pending/in_progress/done/blocked), and priority (high/medium/low)
+- get_tasks — Load tasks at session start to pick up where you left off
+- update_task — Update status, priority, or description as work progresses
+
+## Correction Learning
+Prevent repeated mistakes:
+- save_correction — Record "wrong approach → right approach" patterns with context
+- Corrections surface automatically in future sessions when similar situations arise
+
+## Session Reminders
+- set_reminder — Set a nudge that appears at the start of the next session (e.g. "Check if PR was merged")
+- Reminders auto-expire after their TTL (default 7 days)
+
+## Memory Management
+- recall_memories — Search by meaning, not just keywords. Use when you need something specific.
+- list_memories — Browse and filter memories by type, category, scope, or tag. Supports sorting and pagination.
+- update_memory — Change content, importance, type, category, subject, or tags on existing memories.
+- bulk_update / bulk_delete — Efficient batch operations for cleanup.
+- get_stale_memories — Find outdated memories that need review or removal.
+- consolidate_memories — Merge related memories into fewer, richer summaries. Use dry_run first to preview.
+
+## Knowledge Graph
+Build connections between related memories:
+- link_memories — Connect two memories with a relationship: led_to, contradicts, extends, or related.
+- get_memory_links — Explore connections around a memory.
+- get_memory_versions — View edit history of a memory to understand how decisions evolved.
+
+## Document Ingestion
+- ingest_document — Feed in a README, architecture doc, or API spec to auto-extract memories. Great for onboarding on a new project.
+
+## Analytics and Health
+- get_analytics — Memory health dashboard with usage patterns, growth trends, and cleanup opportunities.
+- get_usage — Check memory count, extractions this month, and tier info.
+- get_file_changes — See what files changed since the last session.
+
+## Session End
+- save_session_summary — Capture what was accomplished, key decisions, and next steps. Helps future sessions pick up seamlessly.
+
+## Tool Selection Guide
+| Goal | Tool |
+|------|------|
+| Load context at session start | get_project_context |
+| Save a fact or decision | save_memory |
+| Find a specific memory | recall_memories |
+| Browse/filter memories | list_memories |
+| Learn from a conversation | extract_memories |
+| Onboard from docs | ingest_document |
+| Track cross-session work | save_task / get_tasks |
+| Avoid repeated mistakes | save_correction |
+| Set next-session nudge | set_reminder |
+| Connect related memories | link_memories |
+| Clean up old memories | get_stale_memories / consolidate_memories |
+| Check system health | get_analytics / get_usage |
+| End of session | save_session_summary |
 
 ## Tips
-- Keep memories concise — complete sentences, 1-2 lines each
-- Use descriptive subjects like "auth_system", "database_setup", "css_conventions"
+- Keep memories concise — complete sentences, 1-2 lines each.
+- Use descriptive subjects like "auth_system", "database_setup", "css_conventions".
 - Higher importance = surfaced more often. Reserve 9-10 for core architecture.
-- Use recall_memories when you need to look up something specific from past sessions.
-- Use ingest_document to quickly onboard from READMEs, architecture docs, or API specs.`,
+- Use tags to group related memories (e.g. ["auth", "oauth2"]).
+- Export memories with export_memories for backup. Import with import_memories.
+- Memories work across any MCP-compatible editor and any AI model — they are not tied to one tool or platform.`,
     }
   );
 
