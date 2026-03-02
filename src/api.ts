@@ -107,6 +107,9 @@ export async function api(
       const res = await fetchWithRetry(fullUrl, { method, headers });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 402) {
+          throw new Error(format402Error(data));
+        }
         const error =
           (data as { error?: string }).error || `HTTP ${res.status}`;
         throw new Error(error);
@@ -119,9 +122,56 @@ export async function api(
   const data = await res.json();
 
   if (!res.ok) {
+    // Surface x402 payment instructions clearly for 402 responses
+    if (res.status === 402) {
+      throw new Error(format402Error(data));
+    }
     const error = (data as { error?: string }).error || `HTTP ${res.status}`;
     throw new Error(error);
   }
 
   return data;
+}
+
+/**
+ * Format a 402 Payment Required response into a clear, actionable message.
+ */
+function format402Error(data: unknown): string {
+  const d = data as {
+    error?: string;
+    verification_error?: string;
+    accepts?: Array<{
+      payTo?: string;
+      maxAmountRequired?: string;
+      network?: string;
+      description?: string;
+      extra?: { name?: string; token?: string };
+    }>;
+  };
+
+  const parts: string[] = ['Payment Required — free tier limit reached.'];
+
+  if (d.verification_error) {
+    parts.push(`Verification error: ${d.verification_error}`);
+  }
+
+  if (d.accepts && d.accepts.length > 0) {
+    parts.push('Pay with USDC on-chain to continue:');
+    // Show unique payment options (deduplicate v1/v2 formats by payTo+network)
+    const seen = new Set<string>();
+    for (const opt of d.accepts) {
+      const key = `${opt.payTo}-${opt.network}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const amount = opt.maxAmountRequired && opt.extra?.name
+        ? `${Number(opt.maxAmountRequired) / 1e6} ${opt.extra.name}`
+        : opt.description || 'see details';
+      parts.push(`  • ${amount} on ${opt.network} → ${opt.payTo}`);
+    }
+    parts.push('Use AgentWallet pay_x402 tool or send USDC directly, then retry with X-PAYMENT header.');
+  }
+
+  parts.push('Or subscribe at https://hifriendbot.com/developer/ for unlimited access.');
+
+  return parts.join('\n');
 }

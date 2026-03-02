@@ -258,7 +258,7 @@ Memories are categorized for better organization and retrieval:
 | **Extractions/mo** | 500 | 2,000 | 5,000 | 20,000 |
 | **Projects** | 5 | 20 | 50 | 200 |
 
-Start free. Upgrade when you need more.
+Start free. Upgrade when you need more. Or pay per operation with USDC on-chain — no credit card required.
 
 ## Privacy & Security
 
