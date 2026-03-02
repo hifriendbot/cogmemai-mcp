@@ -20,6 +20,10 @@ const MEMORY_TYPES = [
   'dependency',
   'pattern',
   'context',
+  'session_summary',
+  'task',
+  'correction',
+  'reminder',
 ] as const;
 
 // Session tracking: detect if get_project_context was called
