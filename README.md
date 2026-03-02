@@ -60,7 +60,7 @@ CogmemAi gives your Ai assistant a real memory system:
 
 ## Why Cloud Memory?
 
-Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.**
+Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.** All memories are encrypted at rest, so your data is just as secure as a local database — with cloud portability and team features on top.
 
 **Your memory follows you everywhere.** Memories created in Claude Code are instantly available in Cursor, Windsurf, Cline, and any MCP-compatible tool. Switch between Opus, Sonnet, Haiku, or any model your editor supports — your memories persist regardless. New laptop? New OS? Log in and your full project knowledge is waiting. A local SQLite file dies with your machine. Cloud memory is permanent.
 
@@ -262,6 +262,7 @@ Start free. Upgrade when you need more. Or pay per operation with USDC on-chain 
 
 ## Privacy & Security
 
+- **Encryption at rest.** All memories are encrypted before they touch the database. Even in a data breach, your data is unreadable.
 - **No source code leaves your machine.** We store extracted facts (short sentences), never raw code.
 - **API keys cryptographically hashed** (irreversible) server-side.
 - **All traffic over HTTPS.**
