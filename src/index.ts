@@ -168,6 +168,9 @@ Build connections between related memories:
 | Check system health | get_analytics / get_usage |
 | End of session | save_session_summary |
 
+## Working with CLAUDE.md / auto-memory files
+If your editor also uses a local memory file (like CLAUDE.md or auto-memory), keep it slim — just critical rules and quick-reference paths (~30-50 lines). Let CogmemAi handle the detailed, searchable knowledge. The local file is a safety net for when the MCP server hasn't loaded yet; CogmemAi is the real memory. Avoid duplicating the same facts in both places.
+
 ## Tips
 - Keep memories concise — complete sentences, 1-2 lines each.
 - Use descriptive subjects like "auth_system", "database_setup", "css_conventions".
