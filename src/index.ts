@@ -78,10 +78,13 @@ compaction or session restart. This is what makes you remember — never skip it
 - Pass an optional context parameter describing the current task to get more relevant memories.
 - Read the returned memories carefully — they contain architecture decisions, preferences, patterns, and context from past work.
 
-## While Working
+## While Working — Be Proactive
+Use your memory tools continuously, not just when asked:
 - When you learn something important about the codebase (architecture, tech stack, patterns, conventions), save it with save_memory.
 - When the user tells you a preference or makes a decision, save it immediately.
 - When you fix a bug or discover a gotcha, save it so you remember next time.
+- When a topic comes up that might have prior context, call recall_memories to check before answering.
+- When the user asks about their projects, work history, past decisions, or anything from prior sessions, ALWAYS call recall_memories first — never say "I don't know" without searching.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
 
 ## What to Save (with importance guidelines)
