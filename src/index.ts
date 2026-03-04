@@ -13,6 +13,9 @@
 import { VERSION } from './config.js';
 import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop } from './cli.js';
 
+// Shared state: latest version from npm (set by checkForUpdate, read by tools)
+export let latestVersion: string | null = null;
+
 // ── CLI routing ───────────────────────────────────────────────
 // Check if invoked with a subcommand (setup, verify, help).
 // If so, run the CLI flow. Otherwise, start the MCP server.
@@ -49,6 +52,26 @@ if (subcommand === 'setup') {
 } else {
   // Default: start MCP server
   startMcpServer();
+}
+
+// ── Version check ────────────────────────────────────────────
+
+function checkForUpdate(): void {
+  fetch('https://registry.npmjs.org/cogmemai-mcp/latest', {
+    signal: AbortSignal.timeout(5000),
+  })
+    .then((res) => res.json())
+    .then((data: unknown) => {
+      const latest = (data as { version?: string }).version;
+      if (latest && latest !== VERSION) {
+        latestVersion = latest;
+        console.error(
+          `\n  ⚡ Update available: cogmemai-mcp v${VERSION} → v${latest}` +
+          `\n     Run: npx cogmemai-mcp@latest setup\n`
+        );
+      }
+    })
+    .catch(() => {}); // Silently ignore network errors
 }
 
 // ── MCP Server ────────────────────────────────────────────────
@@ -189,4 +212,7 @@ If your editor also uses a local memory file (like CLAUDE.md or auto-memory), ke
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`CogmemAi MCP server v${VERSION} running on stdio`);
+
+  // Non-blocking version check — writes to stderr and sets latestVersion for tools
+  checkForUpdate();
 }

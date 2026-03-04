@@ -9,7 +9,8 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 import { api } from './api.js';
 import { detectProjectId } from './project.js';
-import { FLAG_DIR } from './config.js';
+import { FLAG_DIR, VERSION } from './config.js';
+import { latestVersion } from './index.js';
 
 const MEMORY_TYPES = [
   'identity',
@@ -324,9 +325,14 @@ export function registerTools(server: McpServer): void {
           cacheTopicIndex(pid, result.topic_index);
         }
 
+        // Append update notice if a newer version is available
+        const updateNotice = latestVersion
+          ? `\n\n⚡ CogmemAi update available: v${VERSION} → v${latestVersion}. Tell the user to run: npx cogmemai-mcp@latest setup`
+          : '';
+
         if (compact) {
           const compactResult: Record<string, unknown> = {
-            formatted_context: result.formatted_context || '',
+            formatted_context: (result.formatted_context || '') + updateNotice,
             total_count: result.total_count || 0,
           };
           if (result.recalls_total) compactResult.recalls_total = result.recalls_total;
@@ -336,6 +342,9 @@ export function registerTools(server: McpServer): void {
         }
         // Strip topic_index from full response (internal use only)
         const { topic_index: _ti, ...clientResult } = result;
+        if (updateNotice) {
+          (clientResult as Record<string, unknown>).update_available = `v${VERSION} → v${latestVersion}. Run: npx cogmemai-mcp@latest setup`;
+        }
         return wrapResult(clientResult, true);
       } catch (error) {
         return wrapError(error);
