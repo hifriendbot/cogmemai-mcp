@@ -23,14 +23,15 @@ function retryDelay(attempt: number): number {
 /**
  * Fetch with exponential backoff retry and request timeout.
  */
-async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
   const retryable = RETRY_CONFIG.retryableStatusCodes as readonly number[];
+  const timeout = timeoutMs || FETCH_TIMEOUT_MS;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     // AbortController for per-request timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
@@ -54,7 +55,7 @@ async function fetchWithRetry(url: string, options: RequestInit): Promise<Respon
 
       // Make timeout errors more descriptive
       if (lastError.name === 'AbortError') {
-        lastError = new Error(`Request timed out after ${FETCH_TIMEOUT_MS}ms`);
+        lastError = new Error(`Request timed out after ${timeout}ms`);
       }
 
       if (attempt < RETRY_CONFIG.maxRetries) {
@@ -73,7 +74,8 @@ async function fetchWithRetry(url: string, options: RequestInit): Promise<Respon
 export async function api(
   path: string,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  timeoutMs?: number
 ): Promise<unknown> {
   const url = `${API_BASE}${path}`;
 
@@ -104,7 +106,7 @@ export async function api(
     if (qs) {
       const separator = url.includes('?') ? '&' : '?';
       const fullUrl = `${url}${separator}${qs}`;
-      const res = await fetchWithRetry(fullUrl, { method, headers });
+      const res = await fetchWithRetry(fullUrl, { method, headers }, timeoutMs);
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 402) {
@@ -118,7 +120,7 @@ export async function api(
     }
   }
 
-  const res = await fetchWithRetry(url, options);
+  const res = await fetchWithRetry(url, options, timeoutMs);
   const data = await res.json();
 
   if (!res.ok) {

@@ -855,7 +855,7 @@ export function registerTools(server: McpServer): void {
         if (memory_type) body.memory_type = memory_type;
         if (category) body.category = category;
 
-        const result = await api('/cogmemai/consolidate', 'POST', body);
+        const result = await api('/cogmemai/consolidate', 'POST', body, 30000); // 30s — consolidation involves AI synthesis
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
