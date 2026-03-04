@@ -190,6 +190,7 @@ Build connections between related memories:
 | Avoid repeated mistakes | save_correction |
 | Set next-session nudge | set_reminder |
 | Connect related memories | link_memories |
+| Improve recall quality | feedback_memory (useful/irrelevant) |
 | Clean up old memories | get_stale_memories / consolidate_memories |
 | Check system health | get_analytics / get_usage |
 | End of session | save_session_summary |

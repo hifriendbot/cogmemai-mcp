@@ -1312,4 +1312,23 @@ export function registerTools(server: McpServer): void {
       }
     }
   );
+
+  // ─── 26. feedback_memory ──────────────────────────────────
+
+  server.tool(
+    'feedback_memory',
+    'Signal whether a recalled memory was useful or irrelevant. Helps improve future recall quality over time. Use after recalling memories to indicate which were helpful vs noise.',
+    {
+      memory_id: z.coerce.number().int().describe('The memory ID to give feedback on'),
+      signal: z.enum(['useful', 'irrelevant']).describe('"useful" boosts the memory\'s ranking, "irrelevant" reduces its importance'),
+    },
+    async ({ memory_id, signal }) => {
+      try {
+        const result = await api('/cogmemai/feedback', 'POST', { memory_id, signal });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
 }
