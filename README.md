@@ -29,7 +29,7 @@ One command. Your assistant remembers your architecture, patterns, decisions, bu
 - **Stale memory detection** — find outdated memories that need review or cleanup
 - **File change awareness** — see what files changed since your last session
 - **Memory consolidation** — merge related memories into comprehensive summaries using Ai
-- **28 tools** — the most complete memory toolkit for Ai coding assistants
+- **29 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
 
@@ -184,11 +184,15 @@ mcpServers:
       COGMEMAI_API_KEY: cm_your_api_key_here
 ```
 
+### CogmemUI Cockpit
+
+[CogmemUI Cockpit](https://hifriendbot.com/cogmemui-cockpit/) is a free multi-model Ai workspace with built-in CogmemAi memory. Add your CogmemAi API key in **Settings > API Keys** and your memory is instantly available. CogmemUI also supports connecting any MCP-compatible tool server via **Settings > MCP Servers** — add endpoints, auto-discover tools, and use them in chat.
+
 Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
 
 ## Tools
 
-CogmemAi provides 28 tools that your Ai assistant uses automatically:
+CogmemAi provides 29 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -220,6 +224,7 @@ CogmemAi provides 28 tools that your Ai assistant uses automatically:
 | `set_reminder` | Set a reminder that surfaces at the start of your next session |
 | `get_stale_memories` | Find memories that may be outdated for review or cleanup |
 | `get_file_changes` | See what files changed since your last session |
+| `feedback_memory` | Signal whether a recalled memory was useful or irrelevant to improve future recall |
 
 ## SDKs
 
