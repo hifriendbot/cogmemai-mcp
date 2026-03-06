@@ -130,10 +130,17 @@ export function registerTools(server: McpServer): void {
         .default(5)
         .describe('1-10 (10 = core architecture, 1 = trivial)'),
       scope: z
-        .enum(['global', 'project'])
+        .enum(['global', 'project', 'team'])
         .default('project')
         .describe(
-          'global = applies everywhere, project = specific to this codebase'
+          'global = applies everywhere, project = specific to this codebase, team = shared with team members'
+        ),
+      team_id: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe(
+          'Team ID (required when scope is "team"). The memory will be shared with all team members.'
         ),
       tags: z
         .array(z.string().max(30))
@@ -150,7 +157,7 @@ export function registerTools(server: McpServer): void {
           'Set an expiration time. Use for temporary context like current task status. Format: "24h", "7d", "30d". Memory auto-archives after expiry.'
         ),
     },
-    async ({ content, memory_type, category, subject, importance, scope, tags, ttl }) => {
+    async ({ content, memory_type, category, subject, importance, scope, team_id, tags, ttl }) => {
       try {
         const projectId = detectProjectId();
         const body: Record<string, unknown> = {
@@ -162,6 +169,7 @@ export function registerTools(server: McpServer): void {
           scope,
           project_id: projectId,
         };
+        if (scope === 'team' && team_id) body.team_id = team_id;
         if (tags && tags.length > 0) body.tags = tags;
         if (ttl) body.ttl = ttl;
         const result = await api('/cogmemai/store', 'POST', body);
@@ -212,10 +220,16 @@ export function registerTools(server: McpServer): void {
         .max(30)
         .optional()
         .describe('Filter by tag (e.g., "marketing-campaign")'),
+      team_id: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe('Optional override. Team memories are automatically included for team/enterprise users.'),
     },
-    async ({ query, scope, limit, memory_type, category, importance_min, tag }) => {
+    async ({ query, scope, limit, memory_type, category, importance_min, tag, team_id }) => {
       try {
         const projectId = detectProjectId();
+
         const result = await api('/cogmemai/recall', 'POST', {
           query,
           scope,
@@ -225,6 +239,7 @@ export function registerTools(server: McpServer): void {
           importance_min: importance_min || undefined,
           tag: tag || undefined,
           project_id: projectId,
+          team_id: team_id || undefined,
         });
         return wrapResult(result);
       } catch (error) {
@@ -306,8 +321,13 @@ export function registerTools(server: McpServer): void {
         .max(100)
         .default(25)
         .describe('Max total memories to return (default 25). Lower values save context tokens.'),
+      team_id: z.coerce
+        .number()
+        .int()
+        .optional()
+        .describe('Optional override. Team memories are automatically included for team/enterprise users.'),
     },
-    async ({ project_id, include_global, context, context_type, compact, limit }) => {
+    async ({ project_id, include_global, context, context_type, compact, limit, team_id }) => {
       try {
         const pid = project_id || detectProjectId();
         const params: Record<string, string> = {
@@ -317,6 +337,9 @@ export function registerTools(server: McpServer): void {
         if (context) params.context = context;
         if (context_type) params.context_type = context_type;
         if (limit) params.limit = String(limit);
+        if (team_id) params.team_id = String(team_id);
+
+        // Backend auto-includes team memories for team/enterprise users.
         const result = await api('/cogmemai/context', 'GET', params) as Record<string, unknown>;
         contextLoaded = true;
 

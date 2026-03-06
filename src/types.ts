@@ -16,6 +16,8 @@ export interface Memory {
   importance: number;
   scope: string;
   project_id: string | null;
+  team_id?: number;
+  author_name?: string;
   relevance_score?: number;
   created_at: string;
   updated_at?: string;

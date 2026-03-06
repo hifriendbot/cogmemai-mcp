@@ -174,6 +174,12 @@ Build connections between related memories:
 - get_usage — Check memory count, extractions this month, and tier info.
 - get_file_changes — See what files changed since the last session.
 
+## Session Protection
+Sessions can crash or terminate unexpectedly. Do NOT wait until the end to save context:
+- Save incremental session summaries at natural milestones (feature complete, bug fixed, key decision made).
+- Use save_memory for important discoveries as they happen, not in batches at the end.
+- If the session dies unexpectedly, at most a few minutes of context should be lost — not an entire session.
+
 ## Session End
 - save_session_summary — Capture what was accomplished, key decisions, and next steps. Helps future sessions pick up seamlessly.
 
