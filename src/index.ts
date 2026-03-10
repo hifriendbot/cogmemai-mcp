@@ -103,9 +103,11 @@ compaction or session restart. This is what makes you remember — never skip it
 
 ## While Working — Be Proactive
 Use your memory tools continuously, not just when asked:
+- When you edit a file, save what you changed immediately (see Session Protection below).
 - When you learn something important about the codebase (architecture, tech stack, patterns, conventions), save it with save_memory.
 - When the user tells you a preference or makes a decision, save it immediately.
 - When you fix a bug or discover a gotcha, save it so you remember next time.
+- When you add or remove code, save the details so post-compaction you don't duplicate or undo your own work.
 - When a topic comes up that might have prior context, call recall_memories to check before answering.
 - When the user asks about their projects, work history, past decisions, or anything from prior sessions, ALWAYS call recall_memories first — never say "I don't know" without searching.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
@@ -174,11 +176,30 @@ Build connections between related memories:
 - get_usage — Check memory count, extractions this month, and tier info.
 - get_file_changes — See what files changed since the last session.
 
-## Session Protection
-Sessions can crash or terminate unexpectedly. Do NOT wait until the end to save context:
-- Save incremental session summaries at natural milestones (feature complete, bug fixed, key decision made).
-- Use save_memory for important discoveries as they happen, not in batches at the end.
-- If the session dies unexpectedly, at most a few minutes of context should be lost — not an entire session.
+## Session Protection — Save Early, Save Often
+Sessions can crash, compact, or terminate unexpectedly. Context compaction can erase
+your working memory mid-session. Do NOT wait until the end to save — you may never get the chance.
+
+**Save a memory IMMEDIATELY after each of these events:**
+- **Every file edit** — Save the exact file path, what was changed (method/function names, line ranges), and why.
+- **New code introduced** — Save new method/function/class signatures, their file location, and purpose.
+- **Code removed** — Save what was deleted and why, so you don't accidentally re-introduce it.
+- **Bug fix** — Save what broke, root cause, and the fix applied.
+- **New API endpoint or route** — Save the route path, handler, file, and purpose.
+- **User decision or preference** — Save it the moment they say it.
+- **Every 3-4 edits** — Save a running list of all files modified this session.
+
+**What to include in edit memories:**
+- Full absolute file path (never relative)
+- Method/function names added, modified, or removed
+- Approximate line numbers or ranges
+- The reason for the change
+- Use TTL "7d" for transient edit tracking, no TTL for architectural changes
+
+**Why this matters:** After context compaction, you lose all conversation history. Without
+granular edit memories, you risk re-adding code that already exists (duplicate methods),
+undoing changes you already made, or losing track of multi-file changes. A few seconds
+of saving prevents catastrophic mistakes like crashing a production site.
 
 ## Session End
 - save_session_summary — Capture what was accomplished, key decisions, and next steps. Helps future sessions pick up seamlessly.
