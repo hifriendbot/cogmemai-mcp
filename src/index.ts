@@ -155,16 +155,25 @@ Prevent repeated mistakes:
 - Reminders auto-expire after their TTL (default 7 days)
 
 ## Memory Management
-- recall_memories — Search by meaning, not just keywords. Use when you need something specific.
+- recall_memories — Search by meaning, not just keywords. Use when you need something specific. Supports context_type (debugging/planning/reviewing) for type-aware ranking, and synthesize=true for AI-synthesized answers from multiple memories. Automatically detects contradictions (same-subject conflicts) in results.
 - list_memories — Browse and filter memories by type, category, scope, or tag. Supports sorting and pagination.
 - update_memory — Change content, importance, type, category, subject, or tags on existing memories.
 - bulk_update / bulk_delete — Efficient batch operations for cleanup.
 - get_stale_memories — Find outdated memories that need review or removal.
 - consolidate_memories — Merge related memories into fewer, richer summaries. Use dry_run first to preview.
 
+## Intelligence Features (Automatic)
+The memory system includes self-improving intelligence that works automatically:
+- **Self-improving recall**: Memories that are frequently useful rank higher over time (reference boost).
+- **Memory decay**: Stale, unreferenced memories gradually sink in ranking. Core memories (importance 9-10) never decay.
+- **Auto-linking**: When you save a memory similar to an existing one (similarity 0.65+), they are automatically linked in the knowledge graph.
+- **Contradiction detection**: Recall results flag when multiple memories share the same subject, suggesting consolidation.
+- **Cross-project pattern detection**: When a subject appears in 3+ projects, it is auto-promoted to global scope.
+- **Proactive insights**: get_project_context surfaces stale critical memories, duplicate subjects needing consolidation, and cross-project promotion candidates.
+
 ## Knowledge Graph
 Build connections between related memories:
-- link_memories — Connect two memories with a relationship: led_to, contradicts, extends, or related.
+- link_memories — Connect two memories with a relationship: led_to, contradicts, extends, or related. (Auto-linking also creates 'related' links automatically on save.)
 - get_memory_links — Explore connections around a memory.
 - get_memory_versions — View edit history of a memory to understand how decisions evolved.
 

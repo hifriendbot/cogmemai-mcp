@@ -225,8 +225,17 @@ export function registerTools(server: McpServer): void {
         .int()
         .optional()
         .describe('Optional override. Team memories are automatically included for team/enterprise users.'),
+      context_type: z
+        .enum(['debugging', 'planning', 'reviewing'])
+        .optional()
+        .describe('Optional context type that shifts scoring weights. debugging = boost bug/pattern memories, planning = boost architecture/decision, reviewing = boost pattern/preference.'),
+      synthesize: z
+        .boolean()
+        .default(false)
+        .optional()
+        .describe('When true and 3+ results are found, returns an AI-synthesized summary combining all memories into a coherent answer.'),
     },
-    async ({ query, scope, limit, memory_type, category, importance_min, tag, team_id }) => {
+    async ({ query, scope, limit, memory_type, category, importance_min, tag, team_id, context_type, synthesize }) => {
       try {
         const projectId = detectProjectId();
 
@@ -240,6 +249,8 @@ export function registerTools(server: McpServer): void {
           tag: tag || undefined,
           project_id: projectId,
           team_id: team_id || undefined,
+          context_type: context_type || undefined,
+          synthesize: synthesize || undefined,
         });
         return wrapResult(result);
       } catch (error) {
