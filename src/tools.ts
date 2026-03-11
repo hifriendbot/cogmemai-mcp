@@ -1,5 +1,5 @@
 /**
- * CogmemAi MCP tool definitions — 28 tools for developer memory.
+ * CogmemAi MCP tool definitions — 29 tools for developer memory.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -25,6 +25,7 @@ const MEMORY_TYPES = [
   'task',
   'correction',
   'reminder',
+  'skill',
 ] as const;
 
 // Session tracking: detect if get_project_context was called
@@ -1354,11 +1355,39 @@ export function registerTools(server: McpServer): void {
     'Signal whether a recalled memory was useful or irrelevant. Helps improve future recall quality over time. Use after recalling memories to indicate which were helpful vs noise.',
     {
       memory_id: z.coerce.number().int().describe('The memory ID to give feedback on'),
-      signal: z.enum(['useful', 'irrelevant']).describe('"useful" boosts the memory\'s ranking, "irrelevant" reduces its importance'),
+      signal: z.enum(['useful', 'irrelevant']).describe('"useful" boosts the memory\'s ranking, "irrelevant" reduces its importance. For skills, "useful" boosts confidence, "irrelevant" reduces it.'),
     },
     async ({ memory_id, signal }) => {
       try {
         const result = await api('/cogmemai/feedback', 'POST', { memory_id, signal });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 27. generate_skills ──────────────────────────────────
+
+  server.tool(
+    'generate_skills',
+    'Manually trigger skill generation from your corrections, preferences, and patterns. Skills are behavioral directives that auto-improve how the AI works with you. CogmemAi also generates skills automatically when enough evidence accumulates — this tool lets you trigger it manually or preview candidates.',
+    {
+      subject: z.string().max(100).optional()
+        .describe('Generate skills for a specific subject. Omit to scan all subjects.'),
+      project_id: z.string().max(200).optional()
+        .describe('Project to generate skills for (auto-detected if omitted)'),
+      dry_run: z.boolean().default(false)
+        .describe('When true, preview skill candidates without generating them'),
+    },
+    async ({ subject, project_id, dry_run }) => {
+      try {
+        const pid = project_id || detectProjectId();
+        const result = await api('/cogmemai/generate-skills', 'POST', {
+          subject: subject || null,
+          project_id: pid || null,
+          dry_run,
+        });
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);

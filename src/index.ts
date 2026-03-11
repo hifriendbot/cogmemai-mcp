@@ -171,6 +171,21 @@ The memory system includes self-improving intelligence that works automatically:
 - **Cross-project pattern detection**: When a subject appears in 3+ projects, it is auto-promoted to global scope.
 - **Proactive insights**: get_project_context surfaces stale critical memories, duplicate subjects needing consolidation, and cross-project promotion candidates.
 
+## Auto-Generated Skills (Closed-Loop Learning)
+CogmemAi automatically synthesizes behavioral skills from your corrections, preferences, and patterns.
+When enough evidence accumulates on a subject (3+ corrections/preferences/decisions), CogmemAi generates
+a behavioral directive — an instruction that tells the AI HOW to behave, not just what to know.
+
+Skills appear in get_project_context as "Behavioral Skills" — treat them as rules to follow, not facts to reference.
+Skills have a confidence score (0.0-1.0) that adjusts automatically:
+- Confidence increases when the skill proves useful (no further corrections on the subject)
+- Confidence decreases when new corrections contradict the skill (it's not working)
+- Low-confidence skills are automatically retired after self-evaluation
+
+This creates a closed learning loop: detect pattern → generate skill → measure effectiveness → adapt or retire.
+Use generate_skills to manually trigger skill creation, or let it happen automatically.
+If a skill is wrong, delete it or give it "irrelevant" feedback via feedback_memory.
+
 ## Knowledge Graph
 Build connections between related memories:
 - link_memories — Connect two memories with a relationship: led_to, contradicts, extends, or related. (Auto-linking also creates 'related' links automatically on save.)
