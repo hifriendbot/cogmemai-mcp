@@ -15,20 +15,29 @@
 
 One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
-## What's New in v3
+## What's New — Intelligence Engine (v3.4)
 
-- **Memory health score** — see how healthy your memory system is at a glance with a 0-100 score and actionable factors
-- **Session replay** — pick up exactly where you left off with automatic session summaries loaded at startup
-- **Self-tuning memory** — memories automatically adjust importance based on real usage; stale memories auto-archive
-- **Auto-ingest README** — when you start a new project, CogmemAi offers to learn from your README instantly
-- **Smart recall** — relevant memories surface automatically as you switch topics mid-session
-- **Auto-learning** — CogmemAi learns from your sessions automatically, no manual saving needed
-- **Task tracking** — save tasks that persist across sessions with status and priority
-- **Correction learning** — teach your assistant what went wrong and what's right, so mistakes aren't repeated
-- **Session reminders** — set nudges that surface automatically at the start of your next session
-- **Stale memory detection** — find outdated memories that need review or cleanup
-- **File change awareness** — see what files changed since your last session
-- **Memory consolidation** — merge related memories into comprehensive summaries using Ai
+CogmemAi now gets smarter every time you use it. The Intelligence Engine is a self-improving memory system that learns what matters, connects related knowledge automatically, and synthesizes answers from your entire memory — no manual curation needed.
+
+- **Self-improving recall** — memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
+- **Auto-linking knowledge graph** — related memories are automatically connected when you save them. Your knowledge builds into a web of relationships, not a flat list
+- **Contradiction detection** — when recalled memories conflict with each other, CogmemAi flags the contradiction so you catch stale or outdated information before it causes problems
+- **Context-aware ranking** — tell CogmemAi what you're doing (debugging, planning, reviewing) and it boosts the right types of memories. Debugging? Bug reports and patterns surface first. Planning? Architecture decisions lead
+- **Query synthesis** — ask a question and get one coherent answer synthesized from all your relevant memories, not just a list of matches. Like asking a teammate who's read everything
+- **Cross-project intelligence** — patterns that appear across 3+ projects are automatically promoted to global scope. Your best practices follow you everywhere without manual effort
+- **Proactive insights** — at session start, CogmemAi tells you what you should know before you ask. Stale critical memories, duplicate subjects that need merging, patterns ready for promotion
+
+### Also in v3
+
+- **Memory health score** — 0-100 score with actionable factors
+- **Session replay** — pick up exactly where you left off with automatic session summaries
+- **Self-tuning memory** — importance adjusts based on real usage; stale memories auto-archive
+- **Auto-ingest README** — learn from your README on new projects instantly
+- **Smart recall** — relevant memories surface automatically as you switch topics
+- **Auto-learning** — CogmemAi learns from your sessions automatically
+- **Task tracking** — persistent tasks with status and priority
+- **Correction learning** — teach your assistant to avoid repeated mistakes
+- **Session reminders** — nudges that surface at the start of your next session
 - **29 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start

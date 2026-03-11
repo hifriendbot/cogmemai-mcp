@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hifriendbot/cogmemai",
-  "description": "CogmemAi — Cognitive Memory for Claude Code. Persistent memory across sessions for developers.",
+  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. Self-improving persistent memory with auto-linking knowledge graph, query synthesis, and context-aware ranking.",
   "repository": {
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
   },
-  "version": "2.7.2",
+  "version": "3.4.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "2.7.2",
+      "version": "3.4.0",
       "transport": {
         "type": "stdio"
       },
