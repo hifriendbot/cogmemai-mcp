@@ -106,7 +106,8 @@ Use your memory tools continuously, not just when asked:
 - When you edit a file, save what you changed immediately (see Session Protection below).
 - When you learn something important about the codebase (architecture, tech stack, patterns, conventions), save it with save_memory.
 - When the user tells you a preference or makes a decision, save it immediately.
-- When you fix a bug or discover a gotcha, save it so you remember next time.
+- When you fix a bug or discover a gotcha, save it so you remember next time. Include what broke, the root cause, and the fix — with file paths and method names. This builds a searchable fix database.
+- When you encounter a new bug or error, ALWAYS call recall_memories first with the error message or symptom. A fix may already exist from a previous session or team member. Search before you debug.
 - When you add or remove code, save the details so post-compaction you don't duplicate or undo your own work.
 - When a topic comes up that might have prior context, call recall_memories to check before answering.
 - When the user asks about their projects, work history, past decisions, or anything from prior sessions, ALWAYS call recall_memories first — never say "I don't know" without searching.
