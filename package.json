@@ -2,7 +2,7 @@
   "name": "cogmemai-mcp",
   "version": "3.5.0",
   "mcpName": "io.github.hifriendbot/cogmemai",
-  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. Self-improving persistent cloud memory with auto-linking knowledge graph, query synthesis, contradiction detection, and context-aware ranking. Encrypted at rest. Switch editors, models, and machines — your knowledge stays. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP client.",
+  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. Self-improving persistent cloud memory with auto-skills, auto-linking knowledge graph, query synthesis, contradiction detection, and context-aware ranking. Encrypted at rest. Switch editors, models, and machines — your knowledge stays. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP client.",
   "type": "module",
   "main": "build/index.js",
   "bin": {

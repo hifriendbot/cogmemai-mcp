@@ -15,9 +15,18 @@
 
 One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
-## What's New — Intelligence Engine (v3.4)
+## What's New — Intelligence Engine + Auto-Skills (v3.5)
 
-CogmemAi now gets smarter every time you use it. The Intelligence Engine is a self-improving memory system that learns what matters, connects related knowledge automatically, and synthesizes answers from your entire memory — no manual curation needed.
+CogmemAi now gets smarter every time you use it. The Intelligence Engine is a self-improving memory system that learns what matters, connects related knowledge automatically, and synthesizes answers from your entire memory. Auto-Skills takes it further — CogmemAi doesn't just remember, it **learns how to behave**.
+
+### Auto-Skills (Closed-Loop Learning)
+
+- **Behavioral skills** — CogmemAi automatically synthesizes your corrections, preferences, and patterns into behavioral directives that tell your Ai assistant HOW to work, not just what to know
+- **Closed learning loop** — correct your assistant once, and CogmemAi detects the pattern. After enough evidence accumulates, it generates a skill that prevents the mistake from ever happening again
+- **Confidence tracking** — each skill has a confidence score that rises when it works and drops when it doesn't. Low-confidence skills are automatically retired
+- **Self-evaluation** — skills periodically review themselves against new evidence and adapt, strengthen, or retire as your practices evolve
+
+### Intelligence Engine
 
 - **Self-improving recall** — memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
 - **Auto-linking knowledge graph** — related memories are automatically connected when you save them. Your knowledge builds into a web of relationships, not a flat list
@@ -38,7 +47,7 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 - **Task tracking** — persistent tasks with status and priority
 - **Correction learning** — teach your assistant to avoid repeated mistakes
 - **Session reminders** — nudges that surface at the start of your next session
-- **29 tools** — the most complete memory toolkit for Ai coding assistants
+- **30 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
 
@@ -193,15 +202,15 @@ mcpServers:
       COGMEMAI_API_KEY: cm_your_api_key_here
 ```
 
-### CogmemUI Cockpit
+### CogmemUI
 
-[CogmemUI Cockpit](https://hifriendbot.com/cogmemui-cockpit/) is a free multi-model Ai workspace with built-in CogmemAi memory. Add your CogmemAi API key in **Settings > API Keys** and your memory is instantly available. CogmemUI also supports connecting any MCP-compatible tool server via **Settings > MCP Servers** — add endpoints, auto-discover tools, and use them in chat.
+[CogmemUI](https://hifriendbot.com/cogmemui/) is a free multi-model Ai workspace with built-in CogmemAi memory. Add your CogmemAi API key in **Settings > API Keys** and your memory is instantly available. CogmemUI also supports connecting any MCP-compatible tool server via **Settings > MCP Servers** — add endpoints, auto-discover tools, and use them in chat.
 
 Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
 
 ## Tools
 
-CogmemAi provides 29 tools that your Ai assistant uses automatically:
+CogmemAi provides 30 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -234,6 +243,7 @@ CogmemAi provides 29 tools that your Ai assistant uses automatically:
 | `get_stale_memories` | Find memories that may be outdated for review or cleanup |
 | `get_file_changes` | See what files changed since your last session |
 | `feedback_memory` | Signal whether a recalled memory was useful or irrelevant to improve future recall |
+| `generate_skills` | Trigger skill generation from your corrections and preferences — or preview candidates with dry run |
 
 ## SDKs
 
