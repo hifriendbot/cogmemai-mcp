@@ -10,7 +10,7 @@
  * Docs: https://hifriendbot.com/developer/
  */
 
-import { VERSION } from './config.js';
+import { VERSION, STORAGE_MODE } from './config.js';
 import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop } from './cli.js';
 
 // Shared state: latest version from npm (set by checkForUpdate, read by tools)
@@ -80,6 +80,9 @@ async function startMcpServer() {
   const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
   const { registerTools } = await import('./tools.js');
+  const { createStorage } = await import('./storage.js');
+
+  const storage = await createStorage();
 
   const server = new McpServer(
     {
@@ -87,7 +90,24 @@ async function startMcpServer() {
       version: VERSION,
     },
     {
-      instructions: `You have persistent memory powered by CogmemAi. Use it proactively:
+      instructions: getSystemInstructions(STORAGE_MODE),
+    }
+  );
+
+  registerTools(server, storage);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`CogmemAi MCP server v${VERSION} running on stdio (${STORAGE_MODE} mode)`);
+
+  // Non-blocking version check — writes to stderr and sets latestVersion for tools
+  checkForUpdate();
+}
+
+// ── System Instructions by Mode ──────────────────────────────
+
+function getSystemInstructions(mode: string): string {
+  const CORE_INSTRUCTIONS = `You have persistent memory powered by CogmemAi. Use it proactively:
 
 ## CRITICAL: Always Have Context Loaded
 Before responding to any user message, verify you have CogmemAi project context
@@ -138,13 +158,55 @@ Organize memories by domain: frontend, backend, database, devops, testing, secur
 ## Scoping
 - Use scope "project" for things specific to this codebase (default)
 - Use scope "global" for user preferences and identity that apply everywhere
-- Use promote_memory to upgrade a project memory to global when you discover it applies everywhere
 
 ## Task Tracking
 Track work across sessions with persistent tasks:
 - save_task — Create a task with title, description, status (pending/in_progress/done/blocked), and priority (high/medium/low)
 - get_tasks — Load tasks at session start to pick up where you left off
 - update_task — Update status, priority, or description as work progresses
+
+## Memory Management
+- recall_memories — Search your memories. Use when you need something specific.
+- list_memories — Browse and filter memories by type, category, scope, or tag. Supports sorting and pagination.
+- update_memory — Change content, importance, type, category, subject, or tags on existing memories.
+- bulk_update / bulk_delete — Efficient batch operations for cleanup.
+
+## Session Protection — Save Early, Save Often
+Sessions can crash, compact, or terminate unexpectedly. Context compaction can erase
+your working memory mid-session. Do NOT wait until the end to save — you may never get the chance.
+
+**Save a memory IMMEDIATELY after each of these events:**
+- **Every file edit** — Save the exact file path, what was changed (method/function names, line ranges), and why.
+- **New code introduced** — Save new method/function/class signatures, their file location, and purpose.
+- **Code removed** — Save what was deleted and why, so you don't accidentally re-introduce it.
+- **Bug fix** — Save what broke, root cause, and the fix applied.
+- **New API endpoint or route** — Save the route path, handler, file, and purpose.
+- **User decision or preference** — Save it the moment they say it.
+- **Every 3-4 edits** — Save a running list of all files modified this session.
+
+**What to include in edit memories:**
+- Full absolute file path (never relative)
+- Method/function names added, modified, or removed
+- Approximate line numbers or ranges
+- The reason for the change
+- Use TTL "7d" for transient edit tracking, no TTL for architectural changes
+
+## Session End
+- save_session_summary — Capture what was accomplished, key decisions, and next steps. Helps future sessions pick up seamlessly.
+
+## Working with CLAUDE.md / auto-memory files
+If your editor also uses a local memory file (like CLAUDE.md or auto-memory), keep it slim — just critical rules and quick-reference paths (~30-50 lines). Let CogmemAi handle the detailed, searchable knowledge. The local file is a safety net for when the MCP server hasn't loaded yet; CogmemAi is the real memory. Avoid duplicating the same facts in both places.
+
+## Tips
+- Keep memories concise — complete sentences, 1-2 lines each.
+- Use descriptive subjects like "auth_system", "database_setup", "css_conventions".
+- Higher importance = surfaced more often. Reserve 9-10 for core architecture.
+- Use tags to group related memories (e.g. ["auth", "oauth2"]).
+- Export memories with export_memories for backup. Import with import_memories.
+- Memories work across any MCP-compatible editor and any AI model — they are not tied to one tool or platform.`;
+
+  // Cloud-only sections appended for cloud and hybrid modes
+  const CLOUD_INTELLIGENCE = `
 
 ## Correction Learning
 Prevent repeated mistakes:
@@ -155,13 +217,11 @@ Prevent repeated mistakes:
 - set_reminder — Set a nudge that appears at the start of the next session (e.g. "Check if PR was merged")
 - Reminders auto-expire after their TTL (default 7 days)
 
-## Memory Management
-- recall_memories — Search by meaning, not just keywords. Use when you need something specific. Supports context_type (debugging/planning/reviewing) for type-aware ranking, and synthesize=true for AI-synthesized answers from multiple memories. Automatically detects contradictions (same-subject conflicts) in results.
-- list_memories — Browse and filter memories by type, category, scope, or tag. Supports sorting and pagination.
-- update_memory — Change content, importance, type, category, subject, or tags on existing memories.
-- bulk_update / bulk_delete — Efficient batch operations for cleanup.
+## Advanced Memory Management
+- recall_memories supports context_type (debugging/planning/reviewing) for type-aware ranking, and synthesize=true for AI-synthesized answers from multiple memories. Automatically detects contradictions (same-subject conflicts) in results.
 - get_stale_memories — Find outdated memories that need review or removal.
 - consolidate_memories — Merge related memories into fewer, richer summaries. Use dry_run first to preview.
+- Use promote_memory to upgrade a project memory to global when you discover it applies everywhere.
 
 ## Intelligence Features (Automatic)
 The memory system includes self-improving intelligence that works automatically:
@@ -201,34 +261,6 @@ Build connections between related memories:
 - get_usage — Check memory count, extractions this month, and tier info.
 - get_file_changes — See what files changed since the last session.
 
-## Session Protection — Save Early, Save Often
-Sessions can crash, compact, or terminate unexpectedly. Context compaction can erase
-your working memory mid-session. Do NOT wait until the end to save — you may never get the chance.
-
-**Save a memory IMMEDIATELY after each of these events:**
-- **Every file edit** — Save the exact file path, what was changed (method/function names, line ranges), and why.
-- **New code introduced** — Save new method/function/class signatures, their file location, and purpose.
-- **Code removed** — Save what was deleted and why, so you don't accidentally re-introduce it.
-- **Bug fix** — Save what broke, root cause, and the fix applied.
-- **New API endpoint or route** — Save the route path, handler, file, and purpose.
-- **User decision or preference** — Save it the moment they say it.
-- **Every 3-4 edits** — Save a running list of all files modified this session.
-
-**What to include in edit memories:**
-- Full absolute file path (never relative)
-- Method/function names added, modified, or removed
-- Approximate line numbers or ranges
-- The reason for the change
-- Use TTL "7d" for transient edit tracking, no TTL for architectural changes
-
-**Why this matters:** After context compaction, you lose all conversation history. Without
-granular edit memories, you risk re-adding code that already exists (duplicate methods),
-undoing changes you already made, or losing track of multi-file changes. A few seconds
-of saving prevents catastrophic mistakes like crashing a production site.
-
-## Session End
-- save_session_summary — Capture what was accomplished, key decisions, and next steps. Helps future sessions pick up seamlessly.
-
 ## Tool Selection Guide
 | Goal | Tool |
 |------|------|
@@ -245,27 +277,62 @@ of saving prevents catastrophic mistakes like crashing a production site.
 | Improve recall quality | feedback_memory (useful/irrelevant) |
 | Clean up old memories | get_stale_memories / consolidate_memories |
 | Check system health | get_analytics / get_usage |
-| End of session | save_session_summary |
+| End of session | save_session_summary |`;
 
-## Working with CLAUDE.md / auto-memory files
-If your editor also uses a local memory file (like CLAUDE.md or auto-memory), keep it slim — just critical rules and quick-reference paths (~30-50 lines). Let CogmemAi handle the detailed, searchable knowledge. The local file is a safety net for when the MCP server hasn't loaded yet; CogmemAi is the real memory. Avoid duplicating the same facts in both places.
+  if (mode === 'local') {
+    return `⚡ CogmemAi is running in LOCAL MODE (SQLite on your machine).
 
-## Tips
-- Keep memories concise — complete sentences, 1-2 lines each.
-- Use descriptive subjects like "auth_system", "database_setup", "css_conventions".
-- Higher importance = surfaced more often. Reserve 9-10 for core architecture.
-- Use tags to group related memories (e.g. ["auth", "oauth2"]).
-- Export memories with export_memories for backup. Import with import_memories.
-- Memories work across any MCP-compatible editor and any AI model — they are not tied to one tool or platform.`,
-    }
-  );
+Local mode gives you: save, recall (keyword search), list, update, delete, export, import, tasks, and session summaries.
 
-  registerTools(server);
+What you're missing in local mode:
+- Semantic search (understands meaning, not just keywords — "how does auth work?" finds JWT and cookie memories)
+- Auto-linking, contradiction detection, memory decay
+- Auto-Skills (closed-loop behavioral learning from your corrections)
+- Knowledge graph, version history, memory consolidation
+- Ai-powered extraction and document ingestion
+- Team collaboration and cross-device portability
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error(`CogmemAi MCP server v${VERSION} running on stdio`);
+Important: Local memory is NOT more private than cloud. Every memory your Ai reads gets sent to the model provider
+(Anthropic, OpenAI, Google) at inference time. The data leaves your machine regardless of where it's stored.
+Cloud mode adds encryption at rest, secret detection, and intelligent features — with the same data flow.
 
-  // Non-blocking version check — writes to stderr and sets latestVersion for tools
-  checkForUpdate();
+Upgrade to cloud (free tier available): https://hifriendbot.com/developer/
+Set COGMEMAI_MODE=cloud or COGMEMAI_MODE=hybrid with your API key.
+
+${CORE_INSTRUCTIONS}
+
+## Tool Selection Guide (Local Mode)
+| Goal | Tool |
+|------|------|
+| Load context at session start | get_project_context |
+| Save a fact or decision | save_memory |
+| Find a specific memory | recall_memories (keyword search) |
+| Browse/filter memories | list_memories |
+| Track cross-session work | save_task / get_tasks |
+| Improve recall quality | feedback_memory (useful/irrelevant) |
+| End of session | save_session_summary |`;
+  }
+
+  if (mode === 'hybrid') {
+    return `⚡ CogmemAi is running in HYBRID MODE — the best of both worlds.
+
+Hybrid mode saves memories locally (fast, guaranteed) AND to cloud (intelligent, portable).
+Reads prefer cloud semantic search with automatic local fallback if offline.
+Unsynced memories push to cloud at session start and end.
+
+You get the full CogmemAi Intelligence Engine plus offline resilience:
+- Semantic search with local keyword fallback
+- Auto-linking, contradiction detection, memory decay
+- Auto-Skills, knowledge graph, version history
+- Ai-powered extraction and document ingestion
+- Team collaboration and cross-device portability
+- Works offline — local SQLite keeps your memories safe when cloud is unreachable
+
+${CORE_INSTRUCTIONS}
+${CLOUD_INTELLIGENCE}`;
+  }
+
+  // Cloud mode — full instructions (default)
+  return `${CORE_INSTRUCTIONS}
+${CLOUD_INTELLIGENCE}`;
 }

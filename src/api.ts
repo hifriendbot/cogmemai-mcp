@@ -2,9 +2,9 @@
  * CogmemAi API client — thin HTTP wrapper with retry logic and timeouts.
  */
 
-import { API_BASE, API_KEY, VERSION, RETRY_CONFIG, FETCH_TIMEOUT_MS } from './config.js';
+import { API_BASE, API_KEY, VERSION, RETRY_CONFIG, FETCH_TIMEOUT_MS, STORAGE_MODE } from './config.js';
 
-if (!API_KEY) {
+if (!API_KEY && STORAGE_MODE !== 'local') {
   console.error(
     'Warning: COGMEMAI_API_KEY not set. Get your key at https://hifriendbot.com/developer/'
   );

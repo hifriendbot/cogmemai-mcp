@@ -82,6 +82,8 @@ Local memory solutions come with maintenance overhead: database management, vers
 
 **Your memory follows you everywhere.** Memories created in Claude Code are instantly available in Cursor, Windsurf, Cline, and any MCP-compatible tool. Switch between Opus, Sonnet, Haiku, or any model your editor supports — your memories persist regardless. New laptop? New OS? Log in and your full project knowledge is waiting. A local SQLite file dies with your machine. Cloud memory is permanent.
 
+**The privacy argument is a myth.** Some memory tools market "local-first" as a privacy advantage. But think about what happens next: every memory your Ai reads gets sent to the model provider (Anthropic, OpenAI, Google) as part of the prompt. Your data leaves your machine at inference time no matter where it's stored. A local SQLite file doesn't protect your memories — it just makes them harder to search, slower to access, and impossible to share. CogmemAi encrypts at rest, transmits over HTTPS, and adds intelligence that local storage simply can't match.
+
 **Teams and collaboration.** Cloud memory is the only way to share project knowledge across teammates. When one developer saves an architecture decision or documents a bug fix, every team member's Ai assistant knows about it instantly. No syncing, no merge conflicts, no stale local databases. Whether it's two developers or twenty, everyone's assistant has the same up-to-date context. This is impossible with local-only memory solutions.
 
 ## Compaction Recovery

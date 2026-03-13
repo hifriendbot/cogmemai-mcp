@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.5.1';
+export const VERSION = '3.6.0';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -14,6 +14,19 @@ export const API_BASE =
 export const API_KEY = process.env.COGMEMAI_API_KEY || '';
 
 export const FLAG_DIR = join(homedir(), '.cogmemai');
+
+// Storage mode: local (SQLite only), cloud (API only), hybrid (both)
+export type StorageMode = 'local' | 'cloud' | 'hybrid';
+
+export const STORAGE_MODE: StorageMode = (() => {
+  const explicit = process.env.COGMEMAI_MODE?.toLowerCase();
+  if (explicit === 'local' || explicit === 'hybrid' || explicit === 'cloud') return explicit;
+  // Auto-detect: API key present → cloud, otherwise → local
+  return API_KEY ? 'cloud' : 'local';
+})();
+
+export const LOCAL_DB_PATH =
+  process.env.COGMEMAI_LOCAL_DB || join(FLAG_DIR, 'local.db');
 
 // Session thresholds
 export const SESSION_EXPIRY_SECONDS = 14400; // 4 hours

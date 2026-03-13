@@ -248,10 +248,15 @@ function isClaudeInstalled(): boolean {
   }
 }
 
-function configureClaudeCode(apiKey: string): { success: boolean; error?: string } {
+function configureClaudeCode(apiKey: string, mode?: string): { success: boolean; error?: string } {
+  const envParts = [];
+  if (apiKey) envParts.push(`-e COGMEMAI_API_KEY=${apiKey}`);
+  if (mode && mode !== 'cloud') envParts.push(`-e COGMEMAI_MODE=${mode}`);
+  const envStr = envParts.join(' ');
+
   try {
     execSync(
-      `claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=${apiKey} --scope user`,
+      `claude mcp add cogmemai cogmemai-mcp ${envStr} --scope user`,
       { stdio: 'pipe', timeout: 10000 }
     );
     return { success: true };
@@ -260,7 +265,7 @@ function configureClaudeCode(apiKey: string): { success: boolean; error?: string
     try {
       execSync(`claude mcp remove cogmemai --scope user`, { stdio: 'pipe', timeout: 5000 });
       execSync(
-        `claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=${apiKey} --scope user`,
+        `claude mcp add cogmemai cogmemai-mcp ${envStr} --scope user`,
         { stdio: 'pipe', timeout: 10000 }
       );
       return { success: true };
@@ -278,13 +283,100 @@ export async function runSetup(providedKey?: string): Promise<void> {
   log(`${DIM}  Persistent memory for Ai coding assistants${RESET}`);
   log('');
 
-  // Step 1: Get API key
+  // Step 1: Choose storage mode
+  log(`  ${BOLD}Step 1:${RESET} How would you like to use CogmemAi?`);
+  log('');
+  log(`  ${CYAN}1${RESET}  ${BOLD}Cloud${RESET} ${GREEN}(recommended)${RESET}`);
+  log(`     Full Ai Intelligence Engine — semantic search, auto-linking,`);
+  log(`     contradiction detection, auto-skills, team collaboration.`);
+  log(`     Requires a free API key.`);
+  log('');
+  log(`  ${CYAN}2${RESET}  ${BOLD}Local only${RESET}`);
+  log(`     Basic memory on your machine. Keyword search, no Ai features.`);
+  log(`     No account needed. Works offline.`);
+  log('');
+  log(`  ${CYAN}3${RESET}  ${BOLD}Hybrid${RESET} ${DIM}(best of both)${RESET}`);
+  log(`     Local speed + cloud intelligence. Saves everywhere,`);
+  log(`     searches smart, falls back offline. Requires a free API key.`);
+  log('');
+  const modeChoice = await prompt(`  Choose (1/2/3): `);
+  const modeMap: Record<string, string> = { '1': 'cloud', '2': 'local', '3': 'hybrid' };
+  const selectedMode = modeMap[modeChoice.trim()] || 'cloud';
+
+  log('');
+
+  // Local mode: skip API key
+  if (selectedMode === 'local') {
+    log(`  ${BOLD}Selected:${RESET} Local mode (SQLite on your machine)`);
+    log('');
+    log(`  ${DIM}Note: Local memory uses keyword search only. Every memory your Ai reads`);
+    log(`  still gets sent to the model provider at inference time — local storage`);
+    log(`  doesn't add privacy. Cloud mode adds semantic search, auto-skills, and`);
+    log(`  team collaboration with the same data flow.${RESET}`);
+    log('');
+
+    // Configure Claude Code for local mode
+    log(`  ${BOLD}Step 2:${RESET} Configuring Claude Code (local mode)...`);
+
+    if (!isClaudeInstalled()) {
+      warn('Claude Code CLI not found in PATH.');
+      log('');
+      log(`  ${BOLD}Manual setup:${RESET}`);
+      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user${RESET}`);
+      log('');
+      log(`  Or add to your ${BOLD}.mcp.json${RESET}:`);
+      log('');
+      log(`  ${DIM}{`);
+      log(`    "mcpServers": {`);
+      log(`      "cogmemai": {`);
+      log(`        "command": "npx",`);
+      log(`        "args": ["-y", "cogmemai-mcp"],`);
+      log(`        "env": { "COGMEMAI_MODE": "local" }`);
+      log(`      }`);
+      log(`    }`);
+      log(`  }${RESET}`);
+      log('');
+      return;
+    }
+
+    const config = configureClaudeCode('', 'local');
+    if (!config.success) {
+      warn(`Auto-configuration failed: ${config.error}`);
+      log(`  ${BOLD}Run manually:${RESET}`);
+      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user${RESET}`);
+      log('');
+      return;
+    }
+    success('Claude Code configured for local mode');
+
+    // Skip hooks and doc ingest for local mode, just configure CLAUDE.md
+    log('');
+    log(`  ${BOLD}Step 3:${RESET} Configuring auto-memory loading...`);
+    const claudeMdResult = generateClaudeMd();
+    if (claudeMdResult.success) {
+      success('CLAUDE.md configured');
+    }
+
+    log('');
+    log(`  ${GREEN}${BOLD}Setup complete!${RESET} Local mode is ready.`);
+    log('');
+    log(`  ${BOLD}Upgrade anytime:${RESET} Run ${CYAN}npx cogmemai-mcp setup${RESET} and choose Cloud or Hybrid.`);
+    log(`  ${DIM}Free cloud tier: https://hifriendbot.com/developer/${RESET}`);
+    log('');
+    return;
+  }
+
+  // Cloud / Hybrid: need API key
+  log(`  ${BOLD}Selected:${RESET} ${selectedMode === 'hybrid' ? 'Hybrid' : 'Cloud'} mode`);
+  log('');
+
+  // Step 2: Get API key
   let apiKey = providedKey || process.env.COGMEMAI_API_KEY || '';
 
   if (apiKey && apiKey.startsWith('cm_')) {
     log(`  Using API key: ${DIM}${apiKey.slice(0, 6)}...${apiKey.slice(-4)}${RESET}`);
   } else {
-    log(`  ${BOLD}Step 1:${RESET} Enter your CogmemAi API key`);
+    log(`  ${BOLD}Step 2:${RESET} Enter your CogmemAi API key`);
     log(`  ${DIM}Get one free at https://hifriendbot.com/developer/${RESET}`);
     log('');
     apiKey = await prompt(`  API key (cm_...): `);
@@ -299,9 +391,9 @@ export async function runSetup(providedKey?: string): Promise<void> {
     return;
   }
 
-  // Step 2: Verify the key
+  // Step 3: Verify the key
   log('');
-  log(`  ${BOLD}Step 2:${RESET} Verifying API key...`);
+  log(`  ${BOLD}Step 3:${RESET} Verifying API key...`);
 
   const result = await verifyApiKey(apiKey);
 
@@ -316,9 +408,9 @@ export async function runSetup(providedKey?: string): Promise<void> {
   success(`API key verified — ${BOLD}${result.data.tier_name}${RESET} tier`);
   log(`  ${DIM}Memories: ${result.data.memory_count}/${result.data.memory_limit} | Projects: ${result.data.project_count}/${result.data.project_limit}${RESET}`);
 
-  // Step 3: Configure Claude Code
+  // Step 4: Configure Claude Code
   log('');
-  log(`  ${BOLD}Step 3:${RESET} Configuring Claude Code...`);
+  log(`  ${BOLD}Step 4:${RESET} Configuring Claude Code...`);
 
   if (!isClaudeInstalled()) {
     warn('Claude Code CLI not found in PATH.');
@@ -326,8 +418,14 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log(`  ${BOLD}Manual setup:${RESET}`);
     log(`  Run this command after installing Claude Code:`);
     log('');
-    log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=${apiKey} --scope user${RESET}`);
+    const envFlags = selectedMode === 'hybrid'
+      ? `-e COGMEMAI_API_KEY=${apiKey} -e COGMEMAI_MODE=hybrid`
+      : `-e COGMEMAI_API_KEY=${apiKey}`;
+    log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp ${envFlags} --scope user${RESET}`);
     log('');
+    const envJson = selectedMode === 'hybrid'
+      ? `"COGMEMAI_API_KEY": "${apiKey}", "COGMEMAI_MODE": "hybrid"`
+      : `"COGMEMAI_API_KEY": "${apiKey}"`;
     log(`  Or add to your ${BOLD}.mcp.json${RESET}:`);
     log('');
     log(`  ${DIM}{`);
@@ -335,7 +433,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log(`      "cogmemai": {`);
     log(`        "command": "npx",`);
     log(`        "args": ["-y", "cogmemai-mcp"],`);
-    log(`        "env": { "COGMEMAI_API_KEY": "${apiKey}" }`);
+    log(`        "env": { ${envJson} }`);
     log(`      }`);
     log(`    }`);
     log(`  }${RESET}`);
@@ -343,7 +441,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
     return;
   }
 
-  const config = configureClaudeCode(apiKey);
+  const config = configureClaudeCode(apiKey, selectedMode);
 
   if (!config.success) {
     warn(`Auto-configuration failed: ${config.error}`);
@@ -356,9 +454,9 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
   success('Claude Code configured successfully');
 
-  // Step 4: Configure compaction recovery hooks
+  // Step 5: Configure compaction recovery hooks
   log('');
-  log(`  ${BOLD}Step 4:${RESET} Enabling compaction recovery...`);
+  log(`  ${BOLD}Step 5:${RESET} Enabling compaction recovery...`);
 
   const hookResult = configureHooks();
   if (hookResult.success) {
@@ -369,9 +467,9 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log(`  ${DIM}CogmemAi will still work, but auto-recovery and auto-summary won't be active${RESET}`);
   }
 
-  // Step 5: Configure auto-memory loading via CLAUDE.md
+  // Step 6: Configure auto-memory loading via CLAUDE.md
   log('');
-  log(`  ${BOLD}Step 5:${RESET} Configuring auto-memory loading...`);
+  log(`  ${BOLD}Step 6:${RESET} Configuring auto-memory loading...`);
 
   const claudeMdResult = generateClaudeMd();
   if (claudeMdResult.success) {
@@ -381,7 +479,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log(`  ${DIM}You can manually add memory instructions to ~/.claude/CLAUDE.md${RESET}`);
   }
 
-  // Step 6: Offer document ingestion to seed project memory
+  // Step 7: Offer document ingestion to seed project memory
   await offerDocumentIngest(apiKey);
 
   // Save version to memory
@@ -1447,7 +1545,7 @@ async function offerDocumentIngest(apiKey: string): Promise<void> {
   if (candidates.length === 0) return;
 
   log('');
-  log(`  ${BOLD}Step 6:${RESET} Seed project memory`);
+  log(`  ${BOLD}Step 7:${RESET} Seed project memory`);
   log(`  ${DIM}Found ${candidates.map(c => c.name).join(' and ')} in current directory${RESET}`);
 
   const answer = await prompt(`  Ingest to seed memory? (Y/n): `);
