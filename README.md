@@ -15,7 +15,30 @@
 
 One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
-## What's New — Intelligence Engine + Auto-Skills (v3.5)
+## What's New in v3
+
+### Choose Your Storage Mode (v3.6)
+
+CogmemAi now runs three ways — pick the one that fits your workflow:
+
+| | Cloud (default) | Local | Hybrid |
+|---|---|---|---|
+| **Best for** | Full intelligence, team collaboration, cross-device portability | Zero-config start, offline-only environments | Local speed + cloud brains, travel/unreliable networks |
+| **Setup** | `npx cogmemai-mcp setup` (choose Cloud) | `npx cogmemai-mcp setup` (choose Local) | `npx cogmemai-mcp setup` (choose Hybrid) |
+| **API key needed** | Yes (free) | No | Yes (free) |
+| **Search** | Semantic (by meaning) | Keyword (by text match) | Semantic with local fallback |
+| **Intelligence Engine** | Full — auto-linking, contradiction detection, memory decay, auto-skills, query synthesis | Basic CRUD + keyword search | Full — with offline resilience |
+| **Team collaboration** | Yes | No | Yes |
+| **Cross-device sync** | Automatic | No — data stays on your machine | Automatic with local cache |
+| **Offline support** | Requires internet | Full offline | Falls back to local when offline |
+
+**Cloud mode is the recommended experience.** It gives you the full Intelligence Engine — semantic search that finds memories by meaning, auto-linking knowledge graph, contradiction detection, self-improving recall, auto-skills, query synthesis, and team collaboration. Everything that makes CogmemAi more than just a database.
+
+**Local mode is the zero-friction entry point.** No API key, no account, no internet required. Great for trying CogmemAi in 10 seconds or working in air-gapped environments. You get basic memory storage with keyword search — and when you're ready for more, upgrading to cloud takes one command.
+
+**Hybrid mode is for developers who travel or work on unreliable networks.** Saves to both local and cloud simultaneously. Reads from cloud when available, falls back to local when offline. Unsynced memories automatically push to cloud when connectivity returns.
+
+### Intelligence Engine + Auto-Skills (v3.5)
 
 CogmemAi now gets smarter every time you use it. The Intelligence Engine is a self-improving memory system that learns what matters, connects related knowledge automatically, and synthesizes answers from your entire memory. Auto-Skills takes it further — CogmemAi doesn't just remember, it **learns how to behave**.
 
@@ -55,9 +78,9 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 npx cogmemai-mcp setup
 ```
 
-That's it. The setup wizard verifies your API key, configures Claude Code, installs automatic context recovery, and you're ready. Start Claude Code by typing `claude` and your memories are ready.
+The setup wizard walks you through three choices: **Cloud** (recommended — full Ai intelligence), **Local** (no account needed), or **Hybrid** (both). Pick your mode, enter your API key if needed, and you're ready in under 60 seconds.
 
-Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
+Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/). Or choose Local mode to start immediately with no account.
 
 ## The Problem
 
@@ -76,9 +99,9 @@ CogmemAi gives your Ai assistant a real memory system:
 - **Token-efficient** — compact context loading that won't bloat your conversation
 - **Zero setup** — no databases, no Docker, no Python, no vector stores
 
-## Why Cloud Memory?
+## Why Cloud Is the Recommended Mode
 
-Local memory solutions come with maintenance overhead: database management, version conflicts, storage growth, and setup complexity. CogmemAi runs extraction and search server-side. Your MCP server is a thin HTTP client — **zero local databases, zero RAM issues, zero maintenance.** All memories are encrypted at rest, so your data is just as secure as a local database — with cloud portability and team features on top.
+CogmemAi offers three storage modes, but cloud is where the magic happens. The Intelligence Engine — semantic search, auto-linking knowledge graph, contradiction detection, self-improving recall, auto-skills, and query synthesis — runs server-side. In cloud mode, your MCP server is a thin HTTP client with **zero local databases, zero RAM issues, zero maintenance.** All memories are encrypted at rest, so your data is just as secure as local storage — with cross-device portability and team features on top.
 
 **Your memory follows you everywhere.** Memories created in Claude Code are instantly available in Cursor, Windsurf, Cline, and any MCP-compatible tool. Switch between Opus, Sonnet, Haiku, or any model your editor supports — your memories persist regardless. New laptop? New OS? Log in and your full project knowledge is waiting. A local SQLite file dies with your machine. Cloud memory is permanent.
 
@@ -134,10 +157,31 @@ If you prefer to configure manually instead of using `npx cogmemai-mcp setup`:
 }
 ```
 
+For local mode (no API key needed):
+```json
+{
+  "mcpServers": {
+    "cogmemai": {
+      "command": "cogmemai-mcp",
+      "env": {
+        "COGMEMAI_MODE": "local"
+      }
+    }
+  }
+}
+```
+
 **Option B — Global** (available in every project):
 
 ```bash
+# Cloud (default)
 claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here --scope user
+
+# Local (no API key needed)
+claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user
+
+# Hybrid (both)
+claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here -e COGMEMAI_MODE=hybrid --scope user
 ```
 
 ## Works With
@@ -302,7 +346,9 @@ Read our full [privacy policy](https://hifriendbot.com/privacy-policy/).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `COGMEMAI_API_KEY` | Yes | Your API key (starts with `cm_`) |
+| `COGMEMAI_API_KEY` | Cloud/Hybrid | Your API key (starts with `cm_`). Not needed for local mode. |
+| `COGMEMAI_MODE` | No | Storage mode: `cloud` (default with key), `local` (default without key), or `hybrid` |
+| `COGMEMAI_LOCAL_DB` | No | Path to local database (default: `~/.cogmemai/local.db`). Used in local and hybrid modes. |
 | `COGMEMAI_API_URL` | No | Custom API URL (default: hifriendbot.com) |
 
 ## Support
