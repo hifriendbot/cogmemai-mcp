@@ -126,7 +126,6 @@ CogmemAi includes a [Claude Skill](https://github.com/hifriendbot/cogmemai-mcp/t
 
 **Claude.ai:** Upload the `skill/cogmemai-memory` folder in Settings > Skills.
 
-**Claude API:** Use the [Skills API](https://docs.claude.com/en/api/skills-guide) to attach the skill to your requests.
 
 ## CLI Commands
 
