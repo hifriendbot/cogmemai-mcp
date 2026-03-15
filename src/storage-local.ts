@@ -12,6 +12,67 @@ import { getDb, computeExpiresAt } from './local-db.js';
 import { UPSELL } from './upsell.js';
 import { VERSION } from './config.js';
 
+// Stop words — common English words that add noise to keyword search
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'must',
+  'it', 'its', 'this', 'that', 'these', 'those', 'he', 'she', 'they',
+  'we', 'you', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'our',
+  'his', 'their', 'what', 'which', 'who', 'whom', 'where', 'when', 'how',
+  'not', 'no', 'nor', 'but', 'and', 'or', 'if', 'then', 'so', 'than',
+  'too', 'very', 'just', 'about', 'above', 'after', 'again', 'all',
+  'also', 'any', 'because', 'before', 'between', 'both', 'by', 'each',
+  'for', 'from', 'get', 'got', 'here', 'in', 'into', 'of', 'off', 'on',
+  'only', 'other', 'out', 'over', 'own', 'same', 'some', 'such',
+  'to', 'under', 'up', 'with',
+]);
+
+/**
+ * Filter query words: remove stop words, keep words >= 2 chars.
+ * Returns both exact words and prefix-matchable stems.
+ */
+function tokenizeQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !STOP_WORDS.has(w));
+}
+
+/**
+ * Score a text field against query words.
+ * Exact word match = full weight, prefix match (4+ chars) = half weight.
+ */
+function scoreField(text: string, words: string[], weight: number): number {
+  const textLower = text.toLowerCase();
+  let score = 0;
+  for (const word of words) {
+    if (textLower.includes(word)) {
+      score += weight;
+    } else if (word.length >= 4) {
+      // Prefix match: "auth" matches "authentication", "react" matches "reactivity"
+      const prefix = word.slice(0, Math.max(4, Math.floor(word.length * 0.75)));
+      if (textLower.includes(prefix)) {
+        score += weight * 0.5;
+      }
+    }
+  }
+  return score;
+}
+
+/**
+ * Compute a recency boost factor (0.0–1.0) based on updated_at.
+ * Memories updated today = 1.0, 30+ days ago = 0.0.
+ */
+function recencyBoost(updatedAt: string): number {
+  const updated = new Date(updatedAt).getTime();
+  const now = Date.now();
+  const daysSince = (now - updated) / (1000 * 60 * 60 * 24);
+  if (daysSince <= 1) return 1.0;
+  if (daysSince >= 30) return 0.0;
+  return Math.max(0, 1 - (daysSince / 30));
+}
+
 // Milestone thresholds for upgrade nudges
 const MILESTONES = [25, 50, 100, 250, 500] as const;
 const UPGRADE_URL = 'https://hifriendbot.com/developer/';
@@ -95,8 +156,8 @@ export class LocalStorage implements StorageBackend {
     // Remove expired memories first
     db.prepare("DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at < datetime('now')").run();
 
-    // Keyword search: split query into words, score matches
-    const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+    // Keyword search: tokenize query (with stop word filtering)
+    const words = tokenizeQuery(query);
 
     // Build WHERE conditions
     const conditions: string[] = [];
@@ -147,30 +208,39 @@ export class LocalStorage implements StorageBackend {
       LIMIT 200
     `).all(...params) as MemRow[];
 
-    // Score each memory by keyword matches
+    // Score each memory by keyword matches (with prefix matching + recency boost)
     const scored = rows.map(row => {
-      let score = 0;
-      const contentLower = row.content.toLowerCase();
-      const subjectLower = row.subject.toLowerCase();
-      const catLower = row.category.toLowerCase();
+      // Keyword relevance: subject (3x), content (2x), category (1x), tags (2x)
+      let keywordScore = 0;
+      keywordScore += scoreField(row.subject, words, 3);
+      keywordScore += scoreField(row.content, words, 2);
+      keywordScore += scoreField(row.category, words, 1);
+      const tagStr = typeof row.tags === 'string' ? row.tags : '';
+      keywordScore += scoreField(tagStr, words, 2);
 
-      for (const word of words) {
-        if (subjectLower.includes(word)) score += 3;
-        if (contentLower.includes(word)) score += 2;
-        if (catLower.includes(word)) score += 1;
+      // Tiebreaker boosts — only applied AFTER keyword match filtering
+      // These must not inflate a 0-keyword-match memory past the filter threshold
+      let tiebreaker = 0;
+      tiebreaker += row.importance * 0.1;                                    // 0.1–1.0
+      tiebreaker += recencyBoost(row.updated_at);                            // 0.0–1.0
+      if (row.reference_count > 0) {
+        tiebreaker += Math.min(row.reference_count * 0.05, 0.5);            // 0.0–0.5
       }
 
-      // Boost by importance
-      score += row.importance * 0.1;
-
-      return { ...row, relevance_score: Math.round(score * 100) / 100, tags: safeParseTags(row.tags) };
+      return {
+        ...row,
+        keywordScore,
+        relevance_score: Math.round((keywordScore + tiebreaker) * 100) / 100,
+        tags: safeParseTags(row.tags),
+      };
     });
 
-    // Filter to only memories with at least 1 match, sort by score
+    // Filter: must have at least 1 keyword match, then rank by total score
     const results = scored
-      .filter(m => m.relevance_score >= 1)
+      .filter(m => m.keywordScore >= 1)
       .sort((a, b) => b.relevance_score - a.relevance_score)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map(({ keywordScore: _ks, ...rest }) => rest); // strip internal field from output
 
     // Bump reference counts
     if (results.length > 0) {

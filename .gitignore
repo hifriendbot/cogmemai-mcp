@@ -4,3 +4,4 @@ build/
 .DS_Store
 .mcpregistry_*
 mcp-publisher.exe
+.claude/commands/improve.md
