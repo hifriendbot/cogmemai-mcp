@@ -4,6 +4,7 @@
 
 [![npm version](https://img.shields.io/npm/v/cogmemai-mcp)](https://www.npmjs.com/package/cogmemai-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Quantum Safe](https://img.shields.io/badge/🛡%EF%B8%8F_Quantum-Safe-02ffba?style=flat&labelColor=1a1a2e)](https://hifriendbot.com/developer/)
 
 # CogmemAi — Cognitive Memory for Ai Coding Assistants
 
@@ -16,6 +17,10 @@
 One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
 ## What's New in v3
+
+### Quantum-Safe Encryption (v3.7)
+
+CogmemAi is the **first quantum-safe Ai memory system.** All memories are encrypted at rest with quantum-resistant encryption — both in cloud mode and local mode. Your data is protected against today's threats and tomorrow's quantum computers. Encryption is automatic, zero-config, and enabled by default. No setup required.
 
 ### Choose Your Storage Mode (v3.6)
 
@@ -31,6 +36,7 @@ CogmemAi now runs three ways — pick the one that fits your workflow:
 | **Team collaboration** | Yes | No | Yes |
 | **Cross-device sync** | Automatic | No — data stays on your machine | Automatic with local cache |
 | **Offline support** | Requires internet | Full offline | Falls back to local when offline |
+| **Encryption** | Quantum-safe (server) | Quantum-safe (local) | Quantum-safe (both) |
 
 **Cloud mode is the recommended experience.** It gives you the full Intelligence Engine — semantic search that finds memories by meaning, auto-linking knowledge graph, contradiction detection, self-improving recall, auto-skills, query synthesis, and team collaboration. Everything that makes CogmemAi more than just a database.
 
@@ -331,7 +337,7 @@ Start free. Upgrade when you need more. Or pay per operation with USDC on-chain 
 
 ## Privacy & Security
 
-- **Encryption at rest.** All memories are encrypted before they touch the database. Even in a data breach, your data is unreadable.
+- **🛡️ Quantum-safe encryption at rest.** All memories are encrypted with quantum-resistant cryptography — in cloud mode and local mode. Protected against both current threats and future quantum computers.
 - **No source code leaves your machine.** We store extracted facts (short sentences), never raw code.
 - **API keys cryptographically hashed** (irreversible) server-side.
 - **All traffic over HTTPS.**
@@ -349,6 +355,8 @@ Read our full [privacy policy](https://hifriendbot.com/privacy-policy/).
 | `COGMEMAI_MODE` | No | Storage mode: `cloud` (default with key), `local` (default without key), or `hybrid` |
 | `COGMEMAI_LOCAL_DB` | No | Path to local database (default: `~/.cogmemai/local.db`). Used in local and hybrid modes. |
 | `COGMEMAI_API_URL` | No | Custom API URL (default: hifriendbot.com) |
+| `COGMEMAI_ENCRYPTION_KEY` | No | Custom encryption passphrase for local mode. If not set, a key is auto-generated. |
+| `COGMEMAI_LOCAL_ENCRYPTION` | No | Set to `off` to disable local encryption (not recommended). |
 
 ## Support
 
@@ -361,4 +369,4 @@ MIT — see [LICENSE](./LICENSE)
 
 ---
 
-Built by [HiFriendbot](https://hifriendbot.com) — Better Friends, Better Memories, Better Ai.
+Built by [HiFriendbot](https://hifriendbot.com) — Better Friends, Better Memories, Better Ai. 🛡️ Quantum Safe.
