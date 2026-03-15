@@ -1,0 +1,12 @@
+{
+  "name": "hifriendbot/cogmemai-mcp",
+  "description": "Persistent cloud memory for Ai coding assistants — encrypted at rest. 28 MCP tools: semantic search, auto-learning, task tracking, correction patterns, knowledge graphs, and session replay. Works with Claude Code, Cursor, Windsurf, Cline, and any MCP client.",
+  "accepts": [
+    {
+      "network": "eip155:8453",
+      "asset": "USDC",
+      "address": "YOUR_WALLET_ADDRESS"
+    }
+  ],
+  "resources": []
+}
