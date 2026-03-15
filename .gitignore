@@ -5,3 +5,4 @@ build/
 .mcpregistry_*
 mcp-publisher.exe
 .claude/commands/improve.md
+encryption.key

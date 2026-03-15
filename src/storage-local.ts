@@ -11,6 +11,7 @@ import type { StorageMode } from './config.js';
 import { getDb, computeExpiresAt } from './local-db.js';
 import { UPSELL } from './upsell.js';
 import { VERSION } from './config.js';
+import { encrypt, decrypt, isEncryptionEnabled, getEncryptionInfo } from './encryption.js';
 
 // Stop words — common English words that add noise to keyword search
 const STOP_WORDS = new Set([
@@ -102,7 +103,7 @@ export class LocalStorage implements StorageBackend {
     `);
 
     const result = stmt.run(
-      String(body.content || ''),
+      encrypt(String(body.content || '')),
       String(body.memory_type || 'context'),
       String(body.category || 'general'),
       String(body.subject || ''),
@@ -210,10 +211,13 @@ export class LocalStorage implements StorageBackend {
 
     // Score each memory by keyword matches (with prefix matching + recency boost)
     const scored = rows.map(row => {
+      // Decrypt content for scoring and output
+      const plainContent = decrypt(row.content);
+
       // Keyword relevance: subject (3x), content (2x), category (1x), tags (2x)
       let keywordScore = 0;
       keywordScore += scoreField(row.subject, words, 3);
-      keywordScore += scoreField(row.content, words, 2);
+      keywordScore += scoreField(plainContent, words, 2);
       keywordScore += scoreField(row.category, words, 1);
       const tagStr = typeof row.tags === 'string' ? row.tags : '';
       keywordScore += scoreField(tagStr, words, 2);
@@ -229,6 +233,7 @@ export class LocalStorage implements StorageBackend {
 
       return {
         ...row,
+        content: plainContent,
         keywordScore,
         relevance_score: Math.round((keywordScore + tiebreaker) * 100) / 100,
         tags: safeParseTags(row.tags),
@@ -302,10 +307,11 @@ export class LocalStorage implements StorageBackend {
       LIMIT ?
     `).all(...queryParams, limit) as Array<Record<string, unknown>>;
 
-    // Format memories into readable context
+    // Format memories into readable context (decrypt content)
     const formatted = memories.map(m => {
       const tags = safeParseTags(m.tags);
-      return `- [#${m.id}] [${m.memory_type}] ${m.content}` +
+      const plainContent = decrypt(String(m.content));
+      return `- [#${m.id}] [${m.memory_type}] ${plainContent}` +
         (tags.length > 0 ? ` (tags: ${tags.join(', ')})` : '');
     });
 
@@ -405,7 +411,7 @@ export class LocalStorage implements StorageBackend {
     const countRow = db.prepare(`SELECT COUNT(*) as total FROM memories ${whereClause}`).get(...queryParams) as { total: number };
 
     return {
-      memories: memories.map(m => ({ ...m, tags: safeParseTags(m.tags) })),
+      memories: memories.map(m => ({ ...m, content: decrypt(String(m.content)), tags: safeParseTags(m.tags) })),
       total: countRow.total,
       has_more: offset + limit < countRow.total,
     };
@@ -425,7 +431,7 @@ export class LocalStorage implements StorageBackend {
     const values: unknown[] = [];
     const updatedFields: string[] = [];
 
-    if (body.content !== undefined) { fields.push('content = ?'); values.push(String(body.content)); updatedFields.push('content'); }
+    if (body.content !== undefined) { fields.push('content = ?'); values.push(encrypt(String(body.content))); updatedFields.push('content'); }
     if (body.importance !== undefined) { fields.push('importance = ?'); values.push(Number(body.importance)); updatedFields.push('importance'); }
     if (body.scope !== undefined) { fields.push('scope = ?'); values.push(String(body.scope)); updatedFields.push('scope'); }
     if (body.memory_type !== undefined) { fields.push('memory_type = ?'); values.push(String(body.memory_type)); updatedFields.push('memory_type'); }
@@ -498,7 +504,7 @@ export class LocalStorage implements StorageBackend {
 
     const memories = db.prepare(query).all(...queryParams) as Array<Record<string, unknown>>;
     return {
-      memories: memories.map(m => ({ ...m, tags: safeParseTags(m.tags) })),
+      memories: memories.map(m => ({ ...m, content: decrypt(String(m.content)), tags: safeParseTags(m.tags) })),
       total: memories.length,
       exported_at: new Date().toISOString(),
     };
@@ -522,20 +528,23 @@ export class LocalStorage implements StorageBackend {
     `);
     const tagStmt = db.prepare('INSERT OR IGNORE INTO memory_tags (memory_id, tag) VALUES (?, ?)');
 
-    // Simple dedup: check if exact content already exists for this project
-    const existsStmt = db.prepare('SELECT id FROM memories WHERE content = ? AND project_id = ? LIMIT 1');
+    // Simple dedup: check if subject+type already exists for this project
+    // (Can't compare encrypted content directly since each encryption produces different ciphertext)
+    const existsStmt = db.prepare('SELECT id FROM memories WHERE subject = ? AND memory_type = ? AND project_id = ? LIMIT 1');
 
     const importTx = db.transaction(() => {
       for (const mem of memories) {
         const content = String(mem.content || '');
         if (!content || content.length < 3) { skipped++; continue; }
 
-        const existing = existsStmt.get(content, projectId || mem.project_id || null);
+        const subject = String(mem.subject || '');
+        const memType = String(mem.memory_type || 'context');
+        const existing = subject ? existsStmt.get(subject, memType, projectId || mem.project_id || null) : null;
         if (existing) { skipped++; continue; }
 
         const tags = Array.isArray(mem.tags) ? mem.tags : [];
         const result = insertStmt.run(
-          content,
+          encrypt(content),
           String(mem.memory_type || 'context'),
           String(mem.category || 'general'),
           String(mem.subject || ''),
@@ -574,7 +583,7 @@ export class LocalStorage implements StorageBackend {
     `);
     const result = stmt.run(
       body.project_id ? String(body.project_id) : null,
-      String(body.summary || ''),
+      encrypt(String(body.summary || '')),
       body.session_id ? String(body.session_id) : null,
     );
     return {
@@ -649,7 +658,8 @@ export class LocalStorage implements StorageBackend {
     return {
       mode: 'local',
       tier: 'local',
-      tier_name: 'Local (SQLite)',
+      tier_name: 'Local (SQLite, Quantum-Safe Encryption)',
+      encryption: getEncryptionInfo(),
       memory_count: memoryCount,
       memory_limit: 'unlimited',
       task_count: taskCount,
