@@ -77,7 +77,8 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 - **Task tracking** — persistent tasks with status and priority
 - **Correction learning** — teach your assistant to avoid repeated mistakes
 - **Session reminders** — nudges that surface at the start of your next session
-- **30 tools** — the most complete memory toolkit for Ai coding assistants
+- **Mandatory rules** — define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
+- **33 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
 
@@ -262,7 +263,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 30 tools that your Ai assistant uses automatically:
+CogmemAi provides 33 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -296,6 +297,9 @@ CogmemAi provides 30 tools that your Ai assistant uses automatically:
 | `get_file_changes` | See what files changed since your last session |
 | `feedback_memory` | Signal whether a recalled memory was useful or irrelevant to improve future recall |
 | `generate_skills` | Trigger skill generation from your corrections and preferences — or preview candidates with dry run |
+| `save_rule` | Save a mandatory rule that surfaces in every session — bypasses all scoring and decay |
+| `list_rules` | List all mandatory rules for the current project and/or globally |
+| `delete_rule` | Delete a mandatory rule by ID |
 
 ## SDKs
 
@@ -319,6 +323,7 @@ Memories are categorized for better organization and retrieval:
 - **task** — Persistent tasks with status and priority tracking
 - **correction** — Wrong approach → right approach patterns
 - **reminder** — Next-session nudges that auto-expire
+- **rule** — Mandatory directives that surface in every session, bypassing all scoring and decay
 
 ## Scoping
 
