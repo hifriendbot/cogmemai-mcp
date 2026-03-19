@@ -307,8 +307,25 @@ export class LocalStorage implements StorageBackend {
       LIMIT ?
     `).all(...queryParams, limit) as Array<Record<string, unknown>>;
 
-    // Format memories into readable context (decrypt content)
-    const formatted = memories.map(m => {
+    // Separate rules from regular memories — rules always go first
+    const rules = memories.filter(m => m.memory_type === 'rule');
+    const regularMemories = memories.filter(m => m.memory_type !== 'rule');
+
+    // Format rules section
+    const rulesFormatted: string[] = [];
+    if (rules.length > 0) {
+      rulesFormatted.push('## Mandatory Rules — Follow these exactly, no exceptions');
+      for (const r of rules) {
+        const plainContent = decrypt(String(r.content));
+        const scopeLabel = r.scope === 'global' ? '[global]' : '[project]';
+        const subjectLabel = r.subject ? ` (${r.subject})` : '';
+        rulesFormatted.push(`- [#${r.id}] ${scopeLabel}${subjectLabel} ${plainContent}`);
+      }
+      rulesFormatted.push('');
+    }
+
+    // Format regular memories
+    const formatted = regularMemories.map(m => {
       const tags = safeParseTags(m.tags);
       const plainContent = decrypt(String(m.content));
       return `- [#${m.id}] [${m.memory_type}] ${plainContent}` +
@@ -335,7 +352,7 @@ export class LocalStorage implements StorageBackend {
     }
     localHeader.push('');
 
-    const formattedContext = [...localHeader, ...formatted].join('\n');
+    const formattedContext = [...rulesFormatted, ...localHeader, ...formatted].join('\n');
 
     return {
       formatted_context: formattedContext,

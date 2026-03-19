@@ -27,6 +27,7 @@ const MEMORY_TYPES = [
   'correction',
   'reminder',
   'skill',
+  'rule',
 ] as const;
 
 // Session tracking: detect if get_project_context was called
@@ -175,6 +176,111 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (tags && tags.length > 0) body.tags = tags;
         if (ttl) body.ttl = ttl;
         const result = await storage.saveMemory(body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1b. save_rule ──────────────────────────────────────
+  // Rules are mandatory memories that ALWAYS surface in every session.
+  // They bypass scoring, decay, and relevance filtering.
+
+  server.tool(
+    'save_rule',
+    'Save a mandatory rule that will ALWAYS be followed in every session. Rules bypass scoring and decay — they are injected into every conversation, every time. Use for absolute requirements like "NEVER do X" or "ALWAYS do Y".',
+    {
+      content: z
+        .string()
+        .min(5)
+        .max(2000)
+        .describe('The rule to enforce (e.g., "NEVER use -latest model aliases", "ALWAYS apply changes to both class-chat.php AND class-maas.php")'),
+      subject: z
+        .string()
+        .max(100)
+        .default('')
+        .describe('Short label for the rule, e.g. "model_aliases", "companions_parity"'),
+      scope: z
+        .enum(['global', 'project'])
+        .default('project')
+        .describe('global = applies to all projects, project = only this codebase'),
+      category: z
+        .string()
+        .max(50)
+        .default('general')
+        .describe('Category for organization: frontend, backend, security, general, etc.'),
+      tags: z
+        .array(z.string().max(30))
+        .max(5)
+        .optional()
+        .describe('Optional tags for grouping rules'),
+    },
+    async ({ content, subject, scope, category, tags }) => {
+      try {
+        const projectId = detectProjectId();
+        const body: Record<string, unknown> = {
+          content,
+          memory_type: 'rule',
+          category,
+          subject,
+          importance: 10, // Rules are always max importance
+          scope,
+          project_id: projectId,
+        };
+        if (tags && tags.length > 0) body.tags = tags;
+        const result = await storage.saveMemory(body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1c. list_rules ──────────────────────────────────────
+
+  server.tool(
+    'list_rules',
+    'List all mandatory rules for the current project and/or globally. Rules are always-on memories that surface in every session.',
+    {
+      scope: z
+        .enum(['all', 'project', 'global'])
+        .default('all')
+        .describe('Filter: all = project + global, project = this project only, global = global only'),
+    },
+    async ({ scope }) => {
+      try {
+        const projectId = detectProjectId();
+        const body: Record<string, unknown> = {
+          memory_type: 'rule',
+          scope: scope === 'all' ? undefined : scope,
+          project_id: projectId,
+          sort_by: 'created_at',
+          sort_order: 'asc',
+          limit: 100,
+        };
+        const result = await storage.listMemories(body);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1d. delete_rule ──────────────────────────────────────
+
+  server.tool(
+    'delete_rule',
+    'Delete a mandatory rule by its memory ID. Use list_rules to find the ID first.',
+    {
+      memory_id: z.coerce
+        .number()
+        .int()
+        .describe('The memory ID of the rule to delete'),
+    },
+    async ({ memory_id }) => {
+      try {
+        const result = await storage.deleteMemory(memory_id);
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);

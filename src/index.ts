@@ -261,11 +261,22 @@ Build connections between related memories:
 - get_usage — Check memory count, extractions this month, and tier info.
 - get_file_changes — See what files changed since the last session.
 
+## Mandatory Rules
+CogmemAi supports **rules** — mandatory memories that ALWAYS surface in every session, regardless of relevance scoring.
+Use rules for absolute requirements the user has stated: "NEVER do X", "ALWAYS do Y", hard constraints that must never be violated.
+Rules bypass all scoring, decay, and filtering. They appear first in get_project_context, before skills and memories.
+- **save_rule** — create a mandatory rule (auto importance 10, no decay)
+- **list_rules** — view all active rules
+- **delete_rule** — remove a rule by ID
+When a user says something is a hard requirement, an absolute rule, or a "never/always" directive, save it as a rule, not a memory.
+
 ## Tool Selection Guide
 | Goal | Tool |
 |------|------|
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
+| Save an absolute rule | save_rule |
+| List/manage rules | list_rules / delete_rule |
 | Find a specific memory | recall_memories |
 | Browse/filter memories | list_memories |
 | Learn from a conversation | extract_memories |
@@ -306,6 +317,8 @@ ${CORE_INSTRUCTIONS}
 |------|------|
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
+| Save an absolute rule | save_rule |
+| List/manage rules | list_rules / delete_rule |
 | Find a specific memory | recall_memories (keyword search) |
 | Browse/filter memories | list_memories |
 | Track cross-session work | save_task / get_tasks |
