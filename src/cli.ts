@@ -292,8 +292,8 @@ export async function runSetup(providedKey?: string): Promise<void> {
   log(`     Requires a free API key.`);
   log('');
   log(`  ${CYAN}2${RESET}  ${BOLD}Local only${RESET}`);
-  log(`     Basic memory on your machine. Keyword search, no Ai features.`);
-  log(`     No account needed. Works offline.`);
+  log(`     Memory on your machine with full-text search.`);
+  log(`     Requires a free account. Works offline after setup.`);
   log('');
   log(`  ${CYAN}3${RESET}  ${BOLD}Hybrid${RESET} ${DIM}(best of both)${RESET}`);
   log(`     Local speed + cloud intelligence. Saves everywhere,`);
@@ -305,24 +305,54 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
   log('');
 
-  // Local mode: skip API key
+  // Local mode: require free account, then configure locally
   if (selectedMode === 'local') {
     log(`  ${BOLD}Selected:${RESET} Local mode (SQLite on your machine)`);
     log('');
-    log(`  ${DIM}Note: Local memory uses keyword search only. Every memory your Ai reads`);
-    log(`  still gets sent to the model provider at inference time — local storage`);
-    log(`  doesn't add privacy. Cloud mode adds semantic search, auto-skills, and`);
-    log(`  team collaboration with the same data flow.${RESET}`);
+    log(`  ${DIM}A free account is required for all modes. Your data stays on your machine`);
+    log(`  in local mode - the account just lets us know you're a real user.${RESET}`);
     log('');
 
-    // Configure Claude Code for local mode
-    log(`  ${BOLD}Step 2:${RESET} Configuring Claude Code (local mode)...`);
+    // Require API key for local mode
+    log(`  ${BOLD}Step 2:${RESET} Enter your API key`);
+    log(`  ${DIM}Get a free key at: https://hifriendbot.com/developer/${RESET}`);
+    log('');
+    let localApiKey = providedKey || '';
+    if (!localApiKey) {
+      localApiKey = await prompt(`  API Key (cm_...): `);
+      localApiKey = localApiKey.trim();
+    }
+
+    if (!localApiKey || !localApiKey.startsWith('cm_')) {
+      warn('Invalid API key. Get a free key at: https://hifriendbot.com/developer/');
+      return;
+    }
+
+    // Validate the key against the server
+    log(`  ${DIM}Validating...${RESET}`);
+    try {
+      const res = await fetch(`${API_BASE}/cogmemai/usage`, {
+        headers: { 'Authorization': `Bearer ${localApiKey}` },
+      });
+      if (!res.ok) {
+        warn('Invalid or inactive API key. Get a free key at: https://hifriendbot.com/developer/');
+        return;
+      }
+      success('Account verified');
+    } catch {
+      warn('Could not reach server to validate key. Proceeding with local setup.');
+      log(`  ${DIM}Your key will be validated on next online connection.${RESET}`);
+    }
+    log('');
+
+    // Configure Claude Code for local mode (with API key stored for future cloud upgrade)
+    log(`  ${BOLD}Step 3:${RESET} Configuring Claude Code (local mode)...`);
 
     if (!isClaudeInstalled()) {
       warn('Claude Code CLI not found in PATH.');
       log('');
       log(`  ${BOLD}Manual setup:${RESET}`);
-      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user${RESET}`);
+      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local -e COGMEMAI_API_KEY=${localApiKey} --scope user${RESET}`);
       log('');
       log(`  Or add to your ${BOLD}.mcp.json${RESET}:`);
       log('');
@@ -331,7 +361,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
       log(`      "cogmemai": {`);
       log(`        "command": "npx",`);
       log(`        "args": ["-y", "cogmemai-mcp"],`);
-      log(`        "env": { "COGMEMAI_MODE": "local" }`);
+      log(`        "env": { "COGMEMAI_MODE": "local", "COGMEMAI_API_KEY": "${localApiKey}" }`);
       log(`      }`);
       log(`    }`);
       log(`  }${RESET}`);
@@ -339,11 +369,11 @@ export async function runSetup(providedKey?: string): Promise<void> {
       return;
     }
 
-    const config = configureClaudeCode('', 'local');
+    const config = configureClaudeCode(localApiKey, 'local');
     if (!config.success) {
       warn(`Auto-configuration failed: ${config.error}`);
       log(`  ${BOLD}Run manually:${RESET}`);
-      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user${RESET}`);
+      log(`  ${CYAN}claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local -e COGMEMAI_API_KEY=${localApiKey} --scope user${RESET}`);
       log('');
       return;
     }
@@ -351,7 +381,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
     // Skip hooks and doc ingest for local mode, just configure CLAUDE.md
     log('');
-    log(`  ${BOLD}Step 3:${RESET} Configuring auto-memory loading...`);
+    log(`  ${BOLD}Step 4:${RESET} Configuring auto-memory loading...`);
     const claudeMdResult = generateClaudeMd();
     if (claudeMdResult.success) {
       success('CLAUDE.md configured');

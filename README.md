@@ -30,9 +30,9 @@ CogmemAi now runs three ways — pick the one that fits your workflow:
 |---|---|---|---|
 | **Best for** | Full intelligence, team collaboration, cross-device portability | Zero-config start, offline-only environments | Local speed + cloud brains, travel/unreliable networks |
 | **Setup** | `npx cogmemai-mcp setup` (choose Cloud) | `npx cogmemai-mcp setup` (choose Local) | `npx cogmemai-mcp setup` (choose Hybrid) |
-| **API key needed** | Yes (free) | No | Yes (free) |
-| **Search** | Semantic (by meaning) | Keyword (by text match) | Semantic with local fallback |
-| **Intelligence Engine** | Full — auto-linking, contradiction detection, memory decay, auto-skills, query synthesis | Basic CRUD + keyword search | Full — with offline resilience |
+| **API key needed** | Yes (free) | Yes (free) — like a license key, your data stays local | Yes (free) |
+| **Search** | Semantic (by meaning) | Full-text search (FTS5) | Semantic with local fallback |
+| **Intelligence Engine** | Full — auto-linking, contradiction detection, memory decay, auto-skills, query synthesis | FTS5 search + CRUD — data stays on your machine | Full — with offline resilience |
 | **Team collaboration** | Yes | No | Yes |
 | **Cross-device sync** | Automatic | No — data stays on your machine | Automatic with local cache |
 | **Offline support** | Requires internet | Full offline | Falls back to local when offline |
@@ -40,7 +40,7 @@ CogmemAi now runs three ways — pick the one that fits your workflow:
 
 **Cloud mode is the recommended experience.** It gives you the full Intelligence Engine — semantic search that finds memories by meaning, auto-linking knowledge graph, contradiction detection, self-improving recall, auto-skills, query synthesis, and team collaboration. Everything that makes CogmemAi more than just a database.
 
-**Local mode is the zero-friction entry point.** No API key, no account, no internet required. Great for trying CogmemAi in 10 seconds or working in air-gapped environments. You get basic memory storage with keyword search — and when you're ready for more, upgrading to cloud takes one command.
+**Local mode keeps your data on your machine.** A free API key is required for registration (like a software license key), but all your data stays local. Full-text search (FTS5) provides quality recall. Works offline after initial setup. When you're ready for semantic search and the full Intelligence Engine, upgrading to cloud takes one command.
 
 **Hybrid mode is for developers who travel or work on unreliable networks.** Saves to both local and cloud simultaneously. Reads from cloud when available, falls back to local when offline. Unsynced memories automatically push to cloud when connectivity returns.
 
@@ -166,14 +166,15 @@ If you prefer to configure manually instead of using `npx cogmemai-mcp setup`:
 }
 ```
 
-For local mode (no API key needed):
+For local mode (free API key required for registration, data stays local):
 ```json
 {
   "mcpServers": {
     "cogmemai": {
       "command": "cogmemai-mcp",
       "env": {
-        "COGMEMAI_MODE": "local"
+        "COGMEMAI_MODE": "local",
+        "COGMEMAI_API_KEY": "cm_your_api_key_here"
       }
     }
   }
@@ -186,8 +187,8 @@ For local mode (no API key needed):
 # Cloud (default)
 claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here --scope user
 
-# Local (no API key needed)
-claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_MODE=local --scope user
+# Local (free API key required, data stays local)
+claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here -e COGMEMAI_MODE=local --scope user
 
 # Hybrid (both)
 claude mcp add cogmemai cogmemai-mcp -e COGMEMAI_API_KEY=cm_your_api_key_here -e COGMEMAI_MODE=hybrid --scope user
@@ -360,7 +361,7 @@ Read our full [privacy policy](https://hifriendbot.com/privacy-policy/).
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `COGMEMAI_API_KEY` | Cloud/Hybrid | Your API key (starts with `cm_`). Not needed for local mode. |
-| `COGMEMAI_MODE` | No | Storage mode: `cloud` (default with key), `local` (default without key), or `hybrid` |
+| `COGMEMAI_MODE` | No | Storage mode: `cloud` (default), `local` (data stays on your machine), or `hybrid` |
 | `COGMEMAI_LOCAL_DB` | No | Path to local database (default: `~/.cogmemai/local.db`). Used in local and hybrid modes. |
 | `COGMEMAI_API_URL` | No | Custom API URL (default: hifriendbot.com) |
 | `COGMEMAI_ENCRYPTION_KEY` | No | Custom encryption passphrase for local mode. If not set, a key is auto-generated. |
