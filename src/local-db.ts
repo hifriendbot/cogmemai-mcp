@@ -9,7 +9,7 @@ import { LOCAL_DB_PATH } from './config.js';
 
 let db: Database.Database | null = null;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Get or create the SQLite database connection.
@@ -121,12 +121,97 @@ function initSchema(db: Database.Database): void {
       );
     `);
 
-    // Set schema version
+    // Set schema version after v1
     if (currentVersion === 0) {
-      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(SCHEMA_VERSION);
-    } else {
-      db.prepare('UPDATE schema_version SET version = ?').run(SCHEMA_VERSION);
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(1);
     }
+  }
+
+  // ── Schema v2: FTS5 full-text search ─────────────────────
+  if (currentVersion < 2) {
+    try {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+          subject,
+          content,
+          category,
+          tags,
+          content_rowid='id'
+        );
+      `);
+
+      // Backfill existing memories into FTS5 table
+      const existing = db.prepare('SELECT id, subject, content, category, tags FROM memories').all() as Array<{
+        id: number; subject: string; content: string; category: string; tags: string;
+      }>;
+
+      if (existing.length > 0) {
+        const insertFts = db.prepare(
+          'INSERT OR REPLACE INTO memories_fts(rowid, subject, content, category, tags) VALUES (?, ?, ?, ?, ?)'
+        );
+        for (const row of existing) {
+          insertFts.run(row.id, row.subject || '', row.content || '', row.category || '', row.tags || '');
+        }
+      }
+
+      db.prepare('UPDATE schema_version SET version = ?').run(2);
+    } catch {
+      // FTS5 not available in this SQLite build - skip silently, fall back to keyword search
+    }
+  }
+}
+
+/**
+ * Sync a memory row to the FTS5 index. Safe to call even if FTS5 is unavailable.
+ */
+export function ftsUpsert(id: number, subject: string, content: string, category: string, tags: string): void {
+  try {
+    const d = getDb();
+    d.prepare(
+      'INSERT OR REPLACE INTO memories_fts(rowid, subject, content, category, tags) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, subject, content, category, tags);
+  } catch {
+    // FTS5 not available - silently skip
+  }
+}
+
+/**
+ * Remove a memory from the FTS5 index. Safe to call even if FTS5 is unavailable.
+ */
+export function ftsDelete(id: number): void {
+  try {
+    const d = getDb();
+    d.prepare('DELETE FROM memories_fts WHERE rowid = ?').run(id);
+  } catch {
+    // FTS5 not available - silently skip
+  }
+}
+
+/**
+ * Search the FTS5 index. Returns row IDs ranked by relevance, or null if FTS5 unavailable.
+ */
+export function ftsSearch(query: string, limit: number): Array<{ id: number; rank: number }> | null {
+  try {
+    const d = getDb();
+    // FTS5 match syntax: quote terms for safety, use OR between words for broader matching
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+    if (words.length === 0) return null;
+
+    // Build FTS5 query: each word as a separate OR term for broad matching
+    const ftsQuery = words.map(w => `"${w.replace(/"/g, '')}"`)
+      .join(' OR ');
+
+    const rows = d.prepare(`
+      SELECT rowid as id, rank
+      FROM memories_fts
+      WHERE memories_fts MATCH ?
+      ORDER BY rank
+      LIMIT ?
+    `).all(ftsQuery, limit) as Array<{ id: number; rank: number }>;
+
+    return rows.length > 0 ? rows : null;
+  } catch {
+    return null; // FTS5 not available
   }
 }
 

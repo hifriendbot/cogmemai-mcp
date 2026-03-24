@@ -8,7 +8,7 @@
 
 import type { StorageBackend } from './storage.js';
 import type { StorageMode } from './config.js';
-import { getDb, computeExpiresAt } from './local-db.js';
+import { getDb, computeExpiresAt, ftsUpsert, ftsDelete, ftsSearch } from './local-db.js';
 import { UPSELL } from './upsell.js';
 import { VERSION } from './config.js';
 import { encrypt, decrypt, isEncryptionEnabled, getEncryptionInfo } from './encryption.js';
@@ -115,6 +115,15 @@ export class LocalStorage implements StorageBackend {
       expiresAt,
     );
 
+    // Sync to FTS5 index for better search
+    ftsUpsert(
+      Number(result.lastInsertRowid),
+      String(body.subject || ''),
+      String(body.content || ''),
+      String(body.category || 'general'),
+      JSON.stringify(tags),
+    );
+
     // Insert tags into junction table
     if (tags.length > 0) {
       const tagStmt = db.prepare('INSERT OR IGNORE INTO memory_tags (memory_id, tag) VALUES (?, ?)');
@@ -157,95 +166,139 @@ export class LocalStorage implements StorageBackend {
     // Remove expired memories first
     db.prepare("DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at < datetime('now')").run();
 
-    // Keyword search: tokenize query (with stop word filtering)
-    const words = tokenizeQuery(query);
+    // ── Try FTS5 search first (much better quality than keyword includes) ──
+    const ftsHits = ftsSearch(query, limit * 3);
+    let results: Array<Record<string, unknown>>;
 
-    // Build WHERE conditions
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    if (ftsHits && ftsHits.length > 0) {
+      // FTS5 found results - load full rows by ID
+      const ftsIds = ftsHits.map(h => h.id);
+      const placeholders = ftsIds.map(() => '?').join(',');
 
-    if (scope === 'project' && projectId) {
-      conditions.push('project_id = ?');
-      params.push(projectId);
-    } else if (scope === 'global') {
-      conditions.push("scope = 'global'");
-    } else if (scope === 'all' && projectId) {
-      conditions.push("(project_id = ? OR scope = 'global')");
-      params.push(projectId);
-    }
+      // Build scope filter
+      const scopeConditions: string[] = [];
+      const scopeParams: unknown[] = [];
+      if (scope === 'project' && projectId) {
+        scopeConditions.push('project_id = ?');
+        scopeParams.push(projectId);
+      } else if (scope === 'global') {
+        scopeConditions.push("scope = 'global'");
+      } else if (scope === 'all' && projectId) {
+        scopeConditions.push("(project_id = ? OR scope = 'global')");
+        scopeParams.push(projectId);
+      }
+      if (memoryType) { scopeConditions.push('memory_type = ?'); scopeParams.push(memoryType); }
+      if (category) { scopeConditions.push('category = ?'); scopeParams.push(category); }
+      if (importanceMin) { scopeConditions.push('importance >= ?'); scopeParams.push(importanceMin); }
+      if (tag) { scopeConditions.push('id IN (SELECT memory_id FROM memory_tags WHERE tag = ?)'); scopeParams.push(tag); }
 
-    if (memoryType) {
-      conditions.push('memory_type = ?');
-      params.push(memoryType);
-    }
-    if (category) {
-      conditions.push('category = ?');
-      params.push(category);
-    }
-    if (importanceMin) {
-      conditions.push('importance >= ?');
-      params.push(importanceMin);
-    }
-    if (tag) {
-      conditions.push('id IN (SELECT memory_id FROM memory_tags WHERE tag = ?)');
-      params.push(tag);
-    }
+      const extraWhere = scopeConditions.length > 0 ? ' AND ' + scopeConditions.join(' AND ') : '';
 
-    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-
-    // Get all matching memories, then score them
-    interface MemRow {
-      id: number; content: string; memory_type: string; category: string;
-      subject: string; importance: number; scope: string; project_id: string | null;
-      tags: string; reference_count: number; created_at: string; updated_at: string;
-    }
-
-    const rows = db.prepare(`
-      SELECT id, content, memory_type, category, subject, importance, scope,
-             project_id, tags, reference_count, created_at, updated_at
-      FROM memories
-      ${whereClause}
-      ORDER BY importance DESC, updated_at DESC
-      LIMIT 200
-    `).all(...params) as MemRow[];
-
-    // Score each memory by keyword matches (with prefix matching + recency boost)
-    const scored = rows.map(row => {
-      // Decrypt content for scoring and output
-      const plainContent = decrypt(row.content);
-
-      // Keyword relevance: subject (3x), content (2x), category (1x), tags (2x)
-      let keywordScore = 0;
-      keywordScore += scoreField(row.subject, words, 3);
-      keywordScore += scoreField(plainContent, words, 2);
-      keywordScore += scoreField(row.category, words, 1);
-      const tagStr = typeof row.tags === 'string' ? row.tags : '';
-      keywordScore += scoreField(tagStr, words, 2);
-
-      // Tiebreaker boosts — only applied AFTER keyword match filtering
-      // These must not inflate a 0-keyword-match memory past the filter threshold
-      let tiebreaker = 0;
-      tiebreaker += row.importance * 0.1;                                    // 0.1–1.0
-      tiebreaker += recencyBoost(row.updated_at);                            // 0.0–1.0
-      if (row.reference_count > 0) {
-        tiebreaker += Math.min(row.reference_count * 0.05, 0.5);            // 0.0–0.5
+      interface MemRow {
+        id: number; content: string; memory_type: string; category: string;
+        subject: string; importance: number; scope: string; project_id: string | null;
+        tags: string; reference_count: number; created_at: string; updated_at: string;
       }
 
-      return {
-        ...row,
-        content: plainContent,
-        keywordScore,
-        relevance_score: Math.round((keywordScore + tiebreaker) * 100) / 100,
-        tags: safeParseTags(row.tags),
-      };
-    });
+      const rows = db.prepare(`
+        SELECT id, content, memory_type, category, subject, importance, scope,
+               project_id, tags, reference_count, created_at, updated_at
+        FROM memories
+        WHERE id IN (${placeholders})${extraWhere}
+        ORDER BY importance DESC, updated_at DESC
+      `).all(...ftsIds, ...scopeParams) as MemRow[];
 
-    // Filter: must have at least 1 keyword match, then rank by total score
-    const results = scored
-      .filter(m => m.keywordScore >= 1)
-      .sort((a, b) => b.relevance_score - a.relevance_score)
-      .slice(0, limit)
-      .map(({ keywordScore: _ks, ...rest }) => rest); // strip internal field from output
+      // Build a rank map from FTS5 results
+      const rankMap = new Map(ftsHits.map(h => [h.id, h.rank]));
+
+      results = rows.map(row => {
+        const plainContent = decrypt(row.content);
+        const ftsRank = Math.abs(rankMap.get(row.id) || 0);
+        let tiebreaker = 0;
+        tiebreaker += row.importance * 0.1;
+        tiebreaker += recencyBoost(row.updated_at);
+        if (row.reference_count > 0) {
+          tiebreaker += Math.min(row.reference_count * 0.05, 0.5);
+        }
+        return {
+          ...row,
+          content: plainContent,
+          relevance_score: Math.round((ftsRank + tiebreaker) * 100) / 100,
+          tags: safeParseTags(row.tags),
+        };
+      })
+      .sort((a, b) => (b.relevance_score as number) - (a.relevance_score as number))
+      .slice(0, limit);
+
+    } else {
+      // ── Fallback: old keyword includes search ──────────────
+      const words = tokenizeQuery(query);
+
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+
+      if (scope === 'project' && projectId) {
+        conditions.push('project_id = ?');
+        params.push(projectId);
+      } else if (scope === 'global') {
+        conditions.push("scope = 'global'");
+      } else if (scope === 'all' && projectId) {
+        conditions.push("(project_id = ? OR scope = 'global')");
+        params.push(projectId);
+      }
+      if (memoryType) { conditions.push('memory_type = ?'); params.push(memoryType); }
+      if (category) { conditions.push('category = ?'); params.push(category); }
+      if (importanceMin) { conditions.push('importance >= ?'); params.push(importanceMin); }
+      if (tag) { conditions.push('id IN (SELECT memory_id FROM memory_tags WHERE tag = ?)'); params.push(tag); }
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+      interface MemRow {
+        id: number; content: string; memory_type: string; category: string;
+        subject: string; importance: number; scope: string; project_id: string | null;
+        tags: string; reference_count: number; created_at: string; updated_at: string;
+      }
+
+      const rows = db.prepare(`
+        SELECT id, content, memory_type, category, subject, importance, scope,
+               project_id, tags, reference_count, created_at, updated_at
+        FROM memories
+        ${whereClause}
+        ORDER BY importance DESC, updated_at DESC
+        LIMIT 200
+      `).all(...params) as MemRow[];
+
+      const scored = rows.map(row => {
+        const plainContent = decrypt(row.content);
+        let keywordScore = 0;
+        keywordScore += scoreField(row.subject, words, 3);
+        keywordScore += scoreField(plainContent, words, 2);
+        keywordScore += scoreField(row.category, words, 1);
+        const tagStr = typeof row.tags === 'string' ? row.tags : '';
+        keywordScore += scoreField(tagStr, words, 2);
+
+        let tiebreaker = 0;
+        tiebreaker += row.importance * 0.1;
+        tiebreaker += recencyBoost(row.updated_at);
+        if (row.reference_count > 0) {
+          tiebreaker += Math.min(row.reference_count * 0.05, 0.5);
+        }
+
+        return {
+          ...row,
+          content: plainContent,
+          keywordScore,
+          relevance_score: Math.round((keywordScore + tiebreaker) * 100) / 100,
+          tags: safeParseTags(row.tags),
+        };
+      });
+
+      results = scored
+        .filter(m => m.keywordScore >= 1)
+        .sort((a, b) => (b.relevance_score as number) - (a.relevance_score as number))
+        .slice(0, limit)
+        .map(({ keywordScore: _ks, ...rest }) => rest);
+    }
 
     // Bump reference counts
     if (results.length > 0) {
@@ -438,6 +491,7 @@ export class LocalStorage implements StorageBackend {
     const db = getDb();
     db.prepare('DELETE FROM memory_tags WHERE memory_id = ?').run(id);
     db.prepare('DELETE FROM feedback WHERE memory_id = ?').run(id);
+    ftsDelete(id);
     const result = db.prepare('DELETE FROM memories WHERE id = ?').run(id);
     return { success: result.changes > 0, deleted_id: id };
   }
@@ -476,6 +530,14 @@ export class LocalStorage implements StorageBackend {
     values.push(id);
 
     db.prepare(`UPDATE memories SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+    // Sync FTS5 index with updated data
+    const updated = db.prepare('SELECT subject, content, category, tags FROM memories WHERE id = ?').get(id) as {
+      subject: string; content: string; category: string; tags: string;
+    } | undefined;
+    if (updated) {
+      ftsUpsert(id, updated.subject || '', decrypt(updated.content) || '', updated.category || '', updated.tags || '');
+    }
 
     return { success: true, updated_fields: updatedFields };
   }
