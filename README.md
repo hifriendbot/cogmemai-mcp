@@ -92,6 +92,10 @@ The setup wizard walks you through three choices: **Cloud** (recommended — ful
 
 Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/). Or choose Local mode to start immediately with no account.
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/hifriendbot-cogmemai-mcp).
+
 ## The Problem
 
 Every time you start a new session, you lose context. You re-explain your tech stack, your architecture decisions, your coding preferences. Built-in memory in tools like Claude Code is a flat file with no search, no structure, and no intelligence.
