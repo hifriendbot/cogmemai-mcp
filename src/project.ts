@@ -14,6 +14,12 @@ export function detectProjectId(): string {
     return cachedProjectId;
   }
 
+  // Remote HTTP mode has no local git context
+  if (process.env.COGMEMAI_TRANSPORT === 'http') {
+    cachedProjectId = 'remote';
+    return cachedProjectId;
+  }
+
   try {
     const remote = execSync('git remote get-url origin', {
       encoding: 'utf-8',

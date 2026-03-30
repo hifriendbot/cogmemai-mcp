@@ -18,6 +18,10 @@ One command. Your assistant remembers your architecture, patterns, decisions, bu
 
 ## What's New in v3
 
+### Remote MCP — Zero Install (v3.9)
+
+CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 29 tools, same Intelligence Engine, same 85% benchmark accuracy — zero setup friction.
+
 ### Quantum-Safe Encryption (v3.7)
 
 CogmemAi is the **first quantum-safe Ai memory system.** All memories are encrypted at rest with quantum-resistant encryption — both in cloud mode and local mode. Your data is protected against today's threats and tomorrow's quantum computers. Encryption is automatic, zero-config, and enabled by default. No setup required.
@@ -84,11 +88,24 @@ CogmemAi scores **85% accuracy** on the [LoCoMo conversational memory benchmark]
 
 ## Quick Start
 
+### Option 1: Remote (Zero Install)
+
+Connect directly — no npm, no setup, no config files. Just add the remote endpoint to your MCP client with your API key:
+
+**Endpoint:** `https://hifriendbot.com/mcp/`
+**Auth:** Bearer token (your `cm_` API key)
+
+Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/developer/).
+
+Works with any MCP client that supports Streamable HTTP transport (Claude Desktop, Cursor, and more).
+
+### Option 2: Local Install
+
 ```bash
 npx cogmemai-mcp setup
 ```
 
-The setup wizard walks you through three choices: **Cloud** (recommended — full Ai intelligence), **Local** (no account needed), or **Hybrid** (both). Pick your mode, enter your API key if needed, and you're ready in under 60 seconds.
+The setup wizard walks you through three choices: **Cloud** (recommended — full Ai intelligence), **Local** (data stays on your machine), or **Hybrid** (both). Pick your mode, enter your API key if needed, and you're ready in under 60 seconds.
 
 Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/). Or choose Local mode to start immediately with no account.
 

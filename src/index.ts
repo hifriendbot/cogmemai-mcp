@@ -49,8 +49,14 @@ if (subcommand === 'setup') {
   showHelp();
 } else if (subcommand === '--version' || subcommand === '-v' || subcommand === 'version') {
   console.log(`cogmemai-mcp ${VERSION}`);
+} else if (subcommand === 'serve' || process.env.COGMEMAI_TRANSPORT === 'http') {
+  // Remote HTTP server mode
+  import('./http-server.js').then(({ startHttpServer }) => startHttpServer()).catch((err) => {
+    console.error('Failed to start HTTP server:', err.message || err);
+    process.exit(1);
+  });
 } else {
-  // Default: start MCP server
+  // Default: start MCP server (stdio)
   startMcpServer();
 }
 

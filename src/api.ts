@@ -75,17 +75,19 @@ export async function api(
   path: string,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: Record<string, unknown>,
-  timeoutMs?: number
+  timeoutMs?: number,
+  apiKeyOverride?: string
 ): Promise<unknown> {
   const url = `${API_BASE}${path}`;
+  const key = apiKeyOverride || API_KEY;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': `CogmemAi-MCP/${VERSION}`,
   };
 
-  if (API_KEY) {
-    headers['Authorization'] = `Bearer ${API_KEY}`;
+  if (key) {
+    headers['Authorization'] = `Bearer ${key}`;
   }
 
   const options: RequestInit = { method, headers };

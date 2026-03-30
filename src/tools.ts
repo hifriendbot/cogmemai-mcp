@@ -30,6 +30,10 @@ const MEMORY_TYPES = [
   'rule',
 ] as const;
 
+// Remote mode: skip filesystem operations (git, topic cache, snapshots)
+export let remoteMode = false;
+export function setRemoteMode(val: boolean) { remoteMode = val; }
+
 // Session tracking: detect if get_project_context was called
 let contextLoaded = false;
 let toolCallCount = 0;
@@ -51,6 +55,7 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
  * Written when get_project_context succeeds.
  */
 function cacheTopicIndex(projectId: string, topicIndex: unknown[]): void {
+  if (remoteMode) return;
   try {
     mkdirSync(FLAG_DIR, { recursive: true });
     const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
@@ -69,6 +74,7 @@ function cacheTopicIndex(projectId: string, topicIndex: unknown[]): void {
  * Save current git state to a snapshot file for file-change tracking.
  */
 function saveGitSnapshot(snapshotPath: string, branch: string, commit: string): void {
+  if (remoteMode) return;
   try {
     mkdirSync(FLAG_DIR, { recursive: true });
     writeFileSync(snapshotPath, JSON.stringify({
@@ -1347,6 +1353,9 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
     'Show what files changed since your last session. Compares the current git state to a snapshot saved when your previous session ended. Helps you understand what happened between sessions.',
     {},
     async () => {
+      if (remoteMode) {
+        return wrapResult({ message: 'File change tracking is not available in remote mode. This tool requires local git access.' });
+      }
       try {
         const projectId = detectProjectId();
         const safe = projectId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);

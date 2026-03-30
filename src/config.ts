@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.8.2';
+export const VERSION = '3.9.0';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -59,6 +59,12 @@ export const SMART_RECALL_COOLDOWN = 180;       // 3 min between smart injection
 export const SMART_RECALL_MAX_CHARS = 1500;      // Max injected content size
 export const SMART_RECALL_MIN_MSG_LENGTH = 30;   // Min user message length to trigger
 export const SMART_RECALL_MIN_MATCH_SCORE = 2;   // Min keyword matches to trigger recall
+
+// Remote HTTP server configuration
+export const HTTP_PORT = parseInt(process.env.MCP_PORT || '3100', 10);
+export const TOKEN_CACHE_TTL_MS = 300_000; // 5 minutes
+export const RATE_LIMIT_WINDOW_MS = 60_000;
+export const RATE_LIMIT_MAX = 120;
 
 // Auto-extract — learn from every session automatically
 export const AUTO_EXTRACT_COOLDOWN = 1800;         // 30 minutes between auto-extractions (global)

@@ -9,114 +9,119 @@ import { api } from './api.js';
 
 export class CloudStorage implements StorageBackend {
   readonly mode: StorageMode = 'cloud';
+  private apiKey?: string;
+
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey;
+  }
 
   // ─── Core CRUD ─────────────────────────────────────────
 
   async saveMemory(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body);
+    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
   }
 
   async recallMemories(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/recall', 'POST', body);
+    return api('/cogmemai/recall', 'POST', body, undefined, this.apiKey);
   }
 
   async getProjectContext(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/context', 'GET', params);
+    return api('/cogmemai/context', 'GET', params, undefined, this.apiKey);
   }
 
   async listMemories(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/memories', 'GET', params);
+    return api('/cogmemai/memories', 'GET', params, undefined, this.apiKey);
   }
 
   async deleteMemory(id: number): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}`, 'DELETE');
+    return api(`/cogmemai/memory/${id}`, 'DELETE', undefined, undefined, this.apiKey);
   }
 
   async updateMemory(id: number, body: Record<string, unknown>): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}`, 'PATCH', body);
+    return api(`/cogmemai/memory/${id}`, 'PATCH', body, undefined, this.apiKey);
   }
 
   async bulkDelete(ids: number[]): Promise<unknown> {
-    return api('/cogmemai/bulk-delete', 'POST', { ids });
+    return api('/cogmemai/bulk-delete', 'POST', { ids }, undefined, this.apiKey);
   }
 
   async bulkUpdate(updates: unknown[]): Promise<unknown> {
-    return api('/cogmemai/bulk-update', 'POST', { updates });
+    return api('/cogmemai/bulk-update', 'POST', { updates }, undefined, this.apiKey);
   }
 
   // ─── Content & Metadata ────────────────────────────────
 
   async exportMemories(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/export', 'GET', params);
+    return api('/cogmemai/export', 'GET', params, undefined, this.apiKey);
   }
 
   async importMemories(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/import', 'POST', body);
+    return api('/cogmemai/import', 'POST', body, undefined, this.apiKey);
   }
 
   async saveSessionSummary(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/session-summary', 'POST', body);
+    return api('/cogmemai/session-summary', 'POST', body, undefined, this.apiKey);
   }
 
   async listTags(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/tags', 'GET', params);
+    return api('/cogmemai/tags', 'GET', params, undefined, this.apiKey);
   }
 
   async getUsage(): Promise<unknown> {
-    return api('/cogmemai/usage', 'GET');
+    return api('/cogmemai/usage', 'GET', undefined, undefined, this.apiKey);
   }
 
   async feedbackMemory(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/feedback', 'POST', body);
+    return api('/cogmemai/feedback', 'POST', body, undefined, this.apiKey);
   }
 
   // ─── Cloud Intelligence ────────────────────────────────
 
   async extractMemories(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/extract', 'POST', body);
+    return api('/cogmemai/extract', 'POST', body, undefined, this.apiKey);
   }
 
   async ingestDocument(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/ingest', 'POST', body);
+    return api('/cogmemai/ingest', 'POST', body, undefined, this.apiKey);
   }
 
   async linkMemories(id: number, body: Record<string, unknown>): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}/link`, 'POST', body);
+    return api(`/cogmemai/memory/${id}/link`, 'POST', body, undefined, this.apiKey);
   }
 
   async getMemoryLinks(id: number): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}/links`, 'GET');
+    return api(`/cogmemai/memory/${id}/links`, 'GET', undefined, undefined, this.apiKey);
   }
 
   async getMemoryVersions(id: number): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}/versions`, 'GET');
+    return api(`/cogmemai/memory/${id}/versions`, 'GET', undefined, undefined, this.apiKey);
   }
 
   async getAnalytics(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/analytics', 'GET', params);
+    return api('/cogmemai/analytics', 'GET', params, undefined, this.apiKey);
   }
 
   async promoteMemory(id: number): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}/promote`, 'POST');
+    return api(`/cogmemai/memory/${id}/promote`, 'POST', undefined, undefined, this.apiKey);
   }
 
   async consolidateMemories(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/consolidate', 'POST', body, 30000);
+    return api('/cogmemai/consolidate', 'POST', body, 30000, this.apiKey);
   }
 
   async saveCorrection(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body);
+    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
   }
 
   async setReminder(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body);
+    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
   }
 
   async getStaleMemories(params: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/stale', 'GET', params);
+    return api('/cogmemai/stale', 'GET', params, undefined, this.apiKey);
   }
 
   async generateSkills(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/generate-skills', 'POST', body);
+    return api('/cogmemai/generate-skills', 'POST', body, undefined, this.apiKey);
   }
 }
