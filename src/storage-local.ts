@@ -823,6 +823,10 @@ export class LocalStorage implements StorageBackend {
   async generateSkills(_body: Record<string, unknown>): Promise<unknown> {
     return UPSELL.generate_skills();
   }
+
+  async extractPrinciples(_body: Record<string, unknown>): Promise<unknown> {
+    return { message: 'Principle extraction requires cloud mode. The Wisdom Engine uses AI to detect patterns across your memories and extract factual principles. Upgrade to cloud: https://hifriendbot.com/developer/' };
+  }
 }
 
 /**

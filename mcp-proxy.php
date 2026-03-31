@@ -35,7 +35,7 @@ if (!in_array($method, $ALLOWED_METHODS, true)) {
 if ($method === 'OPTIONS') {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version, COGMEMAI_API_KEY');
     header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version');
     http_response_code(204);
     exit;
@@ -71,6 +71,9 @@ if (isset($_SERVER['HTTP_MCP_SESSION_ID'])) {
 }
 if (isset($_SERVER['HTTP_MCP_PROTOCOL_VERSION'])) {
     $forward_headers[] = 'Mcp-Protocol-Version: ' . safe_header_value($_SERVER['HTTP_MCP_PROTOCOL_VERSION']);
+}
+if (isset($_SERVER['HTTP_COGMEMAI_API_KEY'])) {
+    $forward_headers[] = 'COGMEMAI_API_KEY: ' . safe_header_value($_SERVER['HTTP_COGMEMAI_API_KEY']);
 }
 
 // Read request body

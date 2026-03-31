@@ -250,6 +250,10 @@ export class HybridStorage implements StorageBackend {
     return this.cloud.generateSkills(body);
   }
 
+  async extractPrinciples(body: Record<string, unknown>): Promise<unknown> {
+    return this.cloud.extractPrinciples(body);
+  }
+
   // ─── Sync Helpers ──────────────────────────────────────
 
   /**

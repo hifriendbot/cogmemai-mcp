@@ -124,4 +124,8 @@ export class CloudStorage implements StorageBackend {
   async generateSkills(body: Record<string, unknown>): Promise<unknown> {
     return api('/cogmemai/generate-skills', 'POST', body, undefined, this.apiKey);
   }
+
+  async extractPrinciples(body: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/extract-principles', 'POST', body, 30000, this.apiKey);
+  }
 }

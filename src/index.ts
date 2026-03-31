@@ -253,6 +253,14 @@ This creates a closed learning loop: detect pattern → generate skill → measu
 Use generate_skills to manually trigger skill creation, or let it happen automatically.
 If a skill is wrong, delete it or give it "irrelevant" feedback via feedback_memory.
 
+## Learned Principles (Wisdom Engine)
+CogmemAi automatically detects factual patterns across your memories and extracts principles.
+While skills are behavioral ("always do X"), principles are factual ("this codebase tends to have Y").
+Principles are extracted from clusters of 5+ related memories spanning multiple subjects.
+They appear in get_project_context with a confidence score and evidence count.
+Use extract_principles to manually trigger pattern detection, or let it happen automatically.
+Principles have a lifecycle: candidate → established → proven → challenged → retired.
+
 ## Knowledge Graph
 Build connections between related memories:
 - link_memories — Connect two memories with a relationship: led_to, contradicts, extends, or related. (Auto-linking also creates 'related' links automatically on save.)
@@ -292,6 +300,7 @@ When a user says something is a hard requirement, an absolute rule, or a "never/
 | Set next-session nudge | set_reminder |
 | Connect related memories | link_memories |
 | Improve recall quality | feedback_memory (useful/irrelevant) |
+| Extract factual patterns | extract_principles |
 | Clean up old memories | get_stale_memories / consolidate_memories |
 | Check system health | get_analytics / get_usage |
 | End of session | save_session_summary |`;

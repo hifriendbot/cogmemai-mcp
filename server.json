@@ -26,13 +26,12 @@
       ]
     },
     {
-      "registryType": "url",
-      "identifier": "https://mcp.hifriendbot.com/mcp",
+      "registryType": "npm",
+      "identifier": "cogmemai-mcp",
+      "version": "3.9.0",
       "transport": {
         "type": "streamable-http",
-        "authorization": {
-          "type": "bearer"
-        }
+        "url": "https://hifriendbot.com/mcp/"
       }
     }
   ]

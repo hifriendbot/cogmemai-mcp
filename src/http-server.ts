@@ -109,7 +109,7 @@ export function startHttpServer(): void {
   app.use('/mcp', (req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, COGMEMAI_API_KEY');
     res.header('Access-Control-Expose-Headers', 'Mcp-Session-Id, Mcp-Protocol-Version');
     if (req.method === 'OPTIONS') {
       res.status(204).end();
@@ -125,18 +125,25 @@ export function startHttpServer(): void {
 
   // ── POST /mcp — Handle MCP requests (stateless) ──
   app.post('/mcp', async (req: Request, res: Response) => {
-    // Extract Bearer token
+    // Extract API key from Authorization header or COGMEMAI_API_KEY header
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const customKeyHeader = req.headers['cogmemai_api_key'] || req.headers['cogmemai-api-key'];
+    let apiKey = '';
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      apiKey = authHeader.slice(7);
+    } else if (typeof customKeyHeader === 'string' && customKeyHeader.startsWith('cm_')) {
+      apiKey = customKeyHeader;
+    }
+
+    if (!apiKey) {
       res.status(401).json({
         jsonrpc: '2.0',
-        error: { code: -32001, message: 'Missing or invalid Authorization header. Use: Bearer cm_YOUR_API_KEY' },
+        error: { code: -32001, message: 'Missing API key. Use Authorization: Bearer cm_YOUR_KEY or COGMEMAI_API_KEY header.' },
         id: null,
       });
       return;
     }
-
-    const apiKey = authHeader.slice(7); // Remove 'Bearer '
 
     // Validate API key
     const tokenInfo = await validateApiKey(apiKey);
@@ -257,6 +264,7 @@ Save a memory IMMEDIATELY after each file edit, bug fix, or user decision. Sessi
 ## Intelligence Features
 - Auto-linking, contradiction detection, memory decay, cross-project pattern detection
 - Auto-generated behavioral skills from corrections/preferences
+- Wisdom Engine: auto-extracted factual principles from memory clusters (extract_principles)
 - Mandatory rules (save_rule) for absolute requirements
 - Knowledge graph, document ingestion, analytics
 
@@ -273,6 +281,7 @@ Save a memory IMMEDIATELY after each file edit, bug fix, or user decision. Sessi
 | Track cross-session work | save_task / get_tasks |
 | Avoid repeated mistakes | save_correction |
 | Connect related memories | link_memories |
+| Extract factual patterns | extract_principles |
 | Improve recall quality | feedback_memory (useful/irrelevant) |
 | Clean up old memories | get_stale_memories / consolidate_memories |
 | Check system health | get_analytics / get_usage |

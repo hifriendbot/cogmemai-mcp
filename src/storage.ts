@@ -45,6 +45,7 @@ export interface StorageBackend {
   setReminder(body: Record<string, unknown>): Promise<unknown>;
   getStaleMemories(params: Record<string, unknown>): Promise<unknown>;
   generateSkills(body: Record<string, unknown>): Promise<unknown>;
+  extractPrinciples(body: Record<string, unknown>): Promise<unknown>;
 }
 
 /**

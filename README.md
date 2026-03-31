@@ -18,6 +18,10 @@ One command. Your assistant remembers your architecture, patterns, decisions, bu
 
 ## What's New in v3
 
+### Wisdom Engine — Auto-Extracted Principles (v3.10)
+
+CogmemAi now automatically detects patterns across your memories and extracts **factual principles**. While skills tell your Ai HOW to behave ("always use Zustand"), principles tell it what's TRUE about your project ("this codebase never validates inputs at service boundaries"). Principles are extracted from clusters of 5+ related memories, scored by confidence, and injected into every session. Use `extract_principles` to trigger manually or let it happen automatically.
+
 ### Remote MCP — Zero Install (v3.9)
 
 CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 29 tools, same Intelligence Engine, same 85% benchmark accuracy — zero setup friction.

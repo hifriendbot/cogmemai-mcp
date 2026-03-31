@@ -28,6 +28,7 @@ const MEMORY_TYPES = [
   'reminder',
   'skill',
   'rule',
+  'principle',
 ] as const;
 
 // Remote mode: skip filesystem operations (git, topic cache, snapshots)
@@ -1500,6 +1501,34 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       try {
         const pid = project_id || detectProjectId();
         const result = await storage.generateSkills({
+          subject: subject || null,
+          project_id: pid || null,
+          dry_run,
+        });
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 34. extract_principles ────────────────────────────────
+
+  server.tool(
+    'extract_principles',
+    'Analyze memory clusters and extract underlying factual principles or patterns. Principles are observations about your project — "this codebase tends to have X" — not behavioral instructions (those are skills). Use dry_run to preview candidates first.',
+    {
+      subject: z.string().max(100).optional()
+        .describe('Focus on a specific subject area. Omit to scan all subjects.'),
+      project_id: z.string().max(200).optional()
+        .describe('Project to extract principles for (auto-detected if omitted)'),
+      dry_run: z.boolean().default(false)
+        .describe('When true, preview principle candidates without generating them'),
+    },
+    async ({ subject, project_id, dry_run }) => {
+      try {
+        const pid = project_id || detectProjectId();
+        const result = await storage.extractPrinciples({
           subject: subject || null,
           project_id: pid || null,
           dry_run,
