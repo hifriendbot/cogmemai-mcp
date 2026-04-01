@@ -18,6 +18,17 @@ One command. Your assistant remembers your architecture, patterns, decisions, bu
 
 ## What's New in v3
 
+### Think Before You Speak — Proactive Memory Recall (v3.12)
+
+CogmemAi now **thinks before it speaks**. Before your Ai assistant suggests any action, approach, or recommendation, CogmemAi checks its memory first — automatically, on every topic.
+
+- **`preflight` tool** — A fast, lightweight recall designed to be called before every suggestion. Your assistant checks what it already knows about a topic before opening its mouth. "Let's try approach X" → first checks if X was already tried, rejected, or completed. Sub-200ms, near-zero cost.
+- **Prior context surfacing** — Every time a memory is saved, CogmemAi automatically searches for related prior memories across all topics — people, companies, technical approaches, features, everything — and surfaces them in the response. Your assistant never suggests something redundant.
+- **Smart recall hooks** — In Claude Code, CogmemAi reads every user message and automatically injects relevant memories before the assistant responds. No manual recall needed — context arrives before the assistant starts thinking.
+- **Upgraded recall engine** — Higher-dimensional semantic understanding, balanced reranking, keyword-expanded search, dual-path memory storage for more reliable retrieval, and adaptive search that expands automatically when initial results are low confidence.
+
+The result: your Ai assistant stops suggesting things you've already tried, people you've already contacted, and approaches you've already rejected. Your brain is no longer the safety net for what your tools should already know.
+
 ### Wisdom Engine — Auto-Extracted Principles (v3.10)
 
 CogmemAi now automatically detects patterns across your memories and extracts **factual principles**. While skills tell your Ai HOW to behave ("always use Zustand"), principles tell it what's TRUE about your project ("this codebase never validates inputs at service boundaries"). Principles are extracted from clusters of 5+ related memories, scored by confidence, and injected into every session. Use `extract_principles` to trigger manually or let it happen automatically.
@@ -65,9 +76,9 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 
 ### Intelligence Engine — 85% Accuracy on LoCoMo Benchmark
 
-CogmemAi scores **85% accuracy** on the [LoCoMo conversational memory benchmark](https://github.com/snap-research/locomo), with **95% retrieval hit rate**. That's higher than most competing memory systems and validates that CogmemAi finds the right memories when you need them.
+CogmemAi scores **85% accuracy** on the [LoCoMo conversational memory benchmark](https://github.com/snap-research/locomo), with **95% retrieval hit rate**. That's higher than most competing memory systems and validates that CogmemAi finds the right memories when you need them. The v3.12 recall engine upgrade — higher-dimensional embeddings, balanced reranking, query expansion, dual-path storage, and adaptive retrieval — is designed to push this score even higher.
 
-- **Cross-encoder reranking** — every recall runs a second-pass reranker that re-scores candidates for precision. The most relevant memory always surfaces first, not just the closest vector match
+- **Cross-encoder reranking** — every recall runs a second-pass reranker that re-scores candidates for precision, balanced with the initial ranking signal to surface the most relevant memory first
 - **Self-improving recall** — memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
 - **Auto-linking knowledge graph** — related memories are automatically connected when you save them. Your knowledge builds into a web of relationships, not a flat list
 - **Contradiction detection** — when recalled memories conflict with each other, CogmemAi flags the contradiction so you catch stale or outdated information before it causes problems
@@ -88,7 +99,7 @@ CogmemAi scores **85% accuracy** on the [LoCoMo conversational memory benchmark]
 - **Correction learning** — teach your assistant to avoid repeated mistakes
 - **Session reminders** — nudges that surface at the start of your next session
 - **Mandatory rules** — define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
-- **33 tools** — the most complete memory toolkit for Ai coding assistants
+- **35 tools** — the most complete memory toolkit for Ai coding assistants
 
 ## Quick Start
 
@@ -287,10 +298,11 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 33 tools that your Ai assistant uses automatically:
+CogmemAi provides 35 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
+| `preflight` | **Think Before You Speak.** Fast recall to check prior context before making any suggestion |
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |
@@ -324,6 +336,7 @@ CogmemAi provides 33 tools that your Ai assistant uses automatically:
 | `save_rule` | Save a mandatory rule that surfaces in every session — bypasses all scoring and decay |
 | `list_rules` | List all mandatory rules for the current project and/or globally |
 | `delete_rule` | Delete a mandatory rule by ID |
+| `extract_principles` | Trigger Wisdom Engine to detect factual patterns across memory clusters |
 
 ## SDKs
 
