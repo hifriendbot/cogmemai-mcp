@@ -139,6 +139,22 @@ Use your memory tools continuously, not just when asked:
 - When the user asks about their projects, work history, past decisions, or anything from prior sessions, ALWAYS call recall_memories first — never say "I don't know" without searching.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
 
+## Think Before You Speak — ALWAYS Recall Before Suggesting
+Before suggesting ANY action, approach, or recommendation, ALWAYS recall_memories first.
+This is not optional. This is how memory works — you think before you speak.
+
+Examples:
+- "Let's reach out to X" — did we already contact them?
+- "We should try approach Y" — did we already try it? What happened?
+- "Let's add feature Z" — did we already build, evaluate, or reject it?
+- "We should use library X" — did we already evaluate it?
+- "Let's refactor this to..." — was this already attempted? Why was it done this way?
+
+This applies to EVERY topic — technical, business, people, strategy, everything.
+The user's brain should NEVER be the safety net for things your memory already knows.
+If you suggest something redundant or previously rejected, that's a failure.
+Search first, suggest second. Always.
+
 ## What to Save (with importance guidelines)
 - Architecture decisions and tech stack details (importance: 8-10)
 - User preferences for coding style, tools, workflow (importance: 7-9)

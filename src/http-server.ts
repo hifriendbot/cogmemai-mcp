@@ -255,6 +255,15 @@ Use your memory tools continuously, not just when asked:
 - Search before debugging — call recall_memories with error messages first.
 - When the user asks about prior work, ALWAYS call recall_memories before answering.
 
+## Think Before You Speak — ALWAYS Recall Before Suggesting
+Before suggesting ANY action, approach, or recommendation, ALWAYS recall_memories first.
+This applies to EVERY topic — technical, business, people, strategy, everything.
+- "Let's reach out to X" — did we already contact them?
+- "We should try approach Y" — did we already try it? What happened?
+- "Let's add feature Z" — did we already build, evaluate, or reject it?
+The user's brain should NEVER be the safety net for things your memory already knows.
+Search first, suggest second. Always.
+
 ## Memory Types
 identity, preference, architecture, decision, bug, dependency, pattern, context
 
