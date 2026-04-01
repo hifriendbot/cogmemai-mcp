@@ -153,7 +153,11 @@ Examples:
 This applies to EVERY topic — technical, business, people, strategy, everything.
 The user's brain should NEVER be the safety net for things your memory already knows.
 If you suggest something redundant or previously rejected, that's a failure.
-Search first, suggest second. Always.
+
+Use the **preflight** tool — it's fast, cheap, and designed for exactly this.
+Call preflight("topic you're about to suggest") before responding. It returns prior
+context in under 200ms. If it returns "clear", proceed. If it returns context, read
+it and adjust your response accordingly. Make this a habit — every suggestion, every time.
 
 ## What to Save (with importance guidelines)
 - Architecture decisions and tech stack details (importance: 8-10)
@@ -303,6 +307,7 @@ When a user says something is a hard requirement, an absolute rule, or a "never/
 ## Tool Selection Guide
 | Goal | Tool |
 |------|------|
+| **Check before suggesting anything** | **preflight** |
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
 | Save an absolute rule | save_rule |

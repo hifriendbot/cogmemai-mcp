@@ -295,6 +295,57 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
     }
   );
 
+  // ─── 1e. preflight — Think Before You Speak ──────────────
+  // Lightweight, fast recall designed to be called BEFORE the AI responds.
+  // Uses keyword-only search (no embedding generation) for sub-200ms latency.
+
+  server.tool(
+    'preflight',
+    'Think Before You Speak. Call this BEFORE making any suggestion, recommendation, or action plan. Sends the topic to a fast keyword search and returns any relevant prior context — previous attempts, decisions, contacts, evaluations. This prevents suggesting things that were already tried, rejected, or completed. Fast and cheap — use liberally.',
+    {
+      message: z
+        .string()
+        .min(5)
+        .max(1000)
+        .describe('What you are about to suggest or respond about. Be specific — include names, topics, approaches.'),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project ID (auto-detected if omitted)'),
+    },
+    async ({ message, project_id }) => {
+      try {
+        const pid = project_id || detectProjectId();
+        const result = await storage.smartRecall({
+          message,
+          project_id: pid,
+          limit: 5,
+        }) as Record<string, unknown>;
+
+        const memories = (result.memories || []) as Array<Record<string, unknown>>;
+        if (memories.length === 0) {
+          return wrapResult({ status: 'clear', message: 'No prior context found. Proceed with your suggestion.' });
+        }
+
+        const context = memories.map((m: Record<string, unknown>, i: number) => {
+          const date = m.created_at ? ` (${String(m.created_at).split(' ')[0]})` : '';
+          return `[${i + 1}] ${m.subject || 'unknown'}${date}: ${String(m.content || '').substring(0, 200)}`;
+        }).join('\n');
+
+        return wrapResult({
+          status: 'context_found',
+          message: `Found ${memories.length} relevant prior memories. Review these BEFORE making your suggestion:`,
+          prior_context: context,
+          memory_count: memories.length,
+        });
+      } catch (error) {
+        // Non-blocking — if preflight fails, let the AI proceed
+        return wrapResult({ status: 'clear', message: 'Preflight check unavailable. Proceed carefully.' });
+      }
+    }
+  );
+
   // ─── 2. recall_memories ──────────────────────────────────
 
   server.tool(

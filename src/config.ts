@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.11.1';
+export const VERSION = '3.12.0';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -55,10 +55,10 @@ export const SUMMARY_CONFIG = {
 } as const;
 
 // Smart recall — proactive mid-session memory injection on topic shift
-export const SMART_RECALL_COOLDOWN = 180;       // 3 min between smart injections
+export const SMART_RECALL_COOLDOWN = 60;        // 1 min between smart injections (TBYS: think before you speak)
 export const SMART_RECALL_MAX_CHARS = 1500;      // Max injected content size
-export const SMART_RECALL_MIN_MSG_LENGTH = 30;   // Min user message length to trigger
-export const SMART_RECALL_MIN_MATCH_SCORE = 2;   // Min keyword matches to trigger recall
+export const SMART_RECALL_MIN_MSG_LENGTH = 15;   // Min user message length to trigger (TBYS: lower threshold)
+export const SMART_RECALL_MIN_MATCH_SCORE = 1;   // Min keyword matches to trigger recall (TBYS: single match is enough)
 
 // Remote HTTP server configuration
 export const HTTP_PORT = parseInt(process.env.MCP_PORT || '3100', 10);

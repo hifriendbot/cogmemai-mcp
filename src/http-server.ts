@@ -262,7 +262,7 @@ This applies to EVERY topic — technical, business, people, strategy, everythin
 - "We should try approach Y" — did we already try it? What happened?
 - "Let's add feature Z" — did we already build, evaluate, or reject it?
 The user's brain should NEVER be the safety net for things your memory already knows.
-Search first, suggest second. Always.
+Use the **preflight** tool before suggesting anything — it's fast and returns prior context.
 
 ## Memory Types
 identity, preference, architecture, decision, bug, dependency, pattern, context

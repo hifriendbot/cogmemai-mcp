@@ -6,12 +6,12 @@
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
   },
-  "version": "3.9.0",
+  "version": "3.10.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.9.0",
+      "version": "3.10.0",
       "transport": {
         "type": "stdio"
       },
@@ -28,7 +28,7 @@
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.9.0",
+      "version": "3.10.0",
       "transport": {
         "type": "streamable-http",
         "url": "https://hifriendbot.com/mcp/"

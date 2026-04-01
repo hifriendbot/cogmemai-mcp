@@ -827,6 +827,11 @@ export class LocalStorage implements StorageBackend {
   async extractPrinciples(_body: Record<string, unknown>): Promise<unknown> {
     return { message: 'Principle extraction requires cloud mode. The Wisdom Engine uses AI to detect patterns across your memories and extract factual principles. Upgrade to cloud: https://hifriendbot.com/developer/' };
   }
+
+  async smartRecall(body: Record<string, unknown>): Promise<unknown> {
+    // In local mode, use the same recall with a small limit
+    return this.recallMemories({ ...body, limit: body.limit || 3 });
+  }
 }
 
 /**

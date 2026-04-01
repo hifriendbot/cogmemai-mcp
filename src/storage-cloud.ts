@@ -128,4 +128,10 @@ export class CloudStorage implements StorageBackend {
   async extractPrinciples(body: Record<string, unknown>): Promise<unknown> {
     return api('/cogmemai/extract-principles', 'POST', body, 30000, this.apiKey);
   }
+
+  // ─── Think Before You Speak ────────────────────────────
+
+  async smartRecall(body: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/smart-recall', 'POST', body, undefined, this.apiKey);
+  }
 }

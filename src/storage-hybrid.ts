@@ -254,6 +254,11 @@ export class HybridStorage implements StorageBackend {
     return this.cloud.extractPrinciples(body);
   }
 
+  async smartRecall(body: Record<string, unknown>): Promise<unknown> {
+    try { return await this.cloud.smartRecall(body); }
+    catch { return this.local.smartRecall(body); }
+  }
+
   // ─── Sync Helpers ──────────────────────────────────────
 
   /**
