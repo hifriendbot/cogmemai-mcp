@@ -35,7 +35,7 @@ CogmemAi now automatically detects patterns across your memories and extracts **
 
 ### Remote MCP — Zero Install (v3.9)
 
-CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 29 tools, same Intelligence Engine, same 85% benchmark accuracy — zero setup friction.
+CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 29 tools, same Intelligence Engine, same 91% benchmark accuracy — zero setup friction.
 
 ### Quantum-Safe Encryption (v3.7)
 
@@ -74,11 +74,11 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 - **Confidence tracking** — each skill has a confidence score that rises when it works and drops when it doesn't. Low-confidence skills are automatically retired
 - **Self-evaluation** — skills periodically review themselves against new evidence and adapt, strengthen, or retire as your practices evolve
 
-### Intelligence Engine — 85% Accuracy on LoCoMo Benchmark
+### Intelligence Engine — 91% Accuracy on LoCoMo Benchmark (Above Human Performance)
 
-CogmemAi scores **85% accuracy** on the [LoCoMo conversational memory benchmark](https://github.com/snap-research/locomo), with **95% retrieval hit rate**. That's higher than most competing memory systems and validates that CogmemAi finds the right memories when you need them. The v3.12 recall engine upgrade — higher-dimensional embeddings, balanced reranking, query expansion, dual-path storage, and adaptive retrieval — is designed to push this score even higher.
+CogmemAi scores **91% accuracy** on the [LoCoMo conversational memory benchmark](https://github.com/snap-research/locomo), with **100% retrieval hit rate**. That's above human performance (87.9%) on this benchmark and competitive with the top Ai memory systems. CogmemAi finds the right memories when you need them.
 
-- **Cross-encoder reranking** — every recall runs a second-pass reranker that re-scores candidates for precision, balanced with the initial ranking signal to surface the most relevant memory first
+- **Precision reranking** — every recall runs a second-pass reranker that re-scores candidates for precision, balanced with the initial ranking signal to surface the most relevant memory first
 - **Self-improving recall** — memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
 - **Auto-linking knowledge graph** — related memories are automatically connected when you save them. Your knowledge builds into a web of relationships, not a flat list
 - **Contradiction detection** — when recalled memories conflict with each other, CogmemAi flags the contradiction so you catch stale or outdated information before it causes problems

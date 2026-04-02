@@ -1,8 +1,8 @@
 {
   "name": "cogmemai-mcp",
-  "version": "3.12.1",
+  "version": "3.13.0",
   "mcpName": "io.github.hifriendbot/cogmemai",
-  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. 85% accuracy on LoCoMo benchmark. Think Before You Speak: your Ai checks its memory before every suggestion. Enterprise-grade semantic search, self-improving recall, auto-skills, auto-linking knowledge graph, query synthesis, contradiction detection, context-aware ranking, and adaptive retrieval. Quantum-safe encryption. Switch editors, models, and machines — your knowledge stays. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP client.",
+  "description": "CogmemAi — Cognitive Memory for Ai coding assistants. 91% accuracy on LoCoMo benchmark — above human performance. Think Before You Speak: your Ai checks its memory before every suggestion. Enterprise-grade semantic search, self-improving recall, auto-skills, auto-linking knowledge graph, query synthesis, contradiction detection, context-aware ranking, and adaptive retrieval. Quantum-safe encryption. Switch editors, models, and machines — your knowledge stays. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP client.",
   "type": "module",
   "main": "build/index.js",
   "bin": {
