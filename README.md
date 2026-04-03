@@ -1,20 +1,20 @@
 <p align="center">
-  <img src="assets/hero.png" alt="CogmemAi — Why Claude Code Forgets Everything (And How to Fix It)" width="800">
+  <img src="assets/hero.png" alt="CogmemAi — Cognitive Memory for Any Ai System" width="800">
 </p>
 
 [![npm version](https://img.shields.io/npm/v/cogmemai-mcp)](https://www.npmjs.com/package/cogmemai-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Quantum Safe](https://img.shields.io/badge/🛡%EF%B8%8F_Quantum-Safe-02ffba?style=flat&labelColor=1a1a2e)](https://hifriendbot.com/developer/)
 
-# CogmemAi — Cognitive Memory for Ai Coding Assistants
+# CogmemAi — Cognitive Memory for Any Ai System
+
+**Autonomous robots. Self-driving vehicles. Defense systems. Coding assistants. Any Ai system that needs to remember.**
 
 <p align="center">
   <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-**Your Ai coding assistant forgets everything between sessions. CogmemAi fixes that.**
-
-One command. Your assistant remembers your architecture, patterns, decisions, bugs, and preferences — permanently. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
+CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams. 91% accuracy on the LoCoMo benchmark — above human performance. Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
 
 ## What's New in v3
 
