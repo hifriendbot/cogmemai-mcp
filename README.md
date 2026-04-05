@@ -35,7 +35,7 @@ CogmemAi now automatically detects patterns across your memories and extracts **
 
 ### Remote MCP — Zero Install (v3.9)
 
-CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 29 tools, same Intelligence Engine, same 91% benchmark accuracy — zero setup friction.
+CogmemAi now supports **Streamable HTTP transport** — connect from any MCP client without installing anything. No npm, no config files, no Node.js required. Just point your client to `https://hifriendbot.com/mcp/` with your API key and start using persistent memory immediately. Same 35 tools, same Intelligence Engine, same 91% benchmark accuracy — zero setup friction.
 
 ### Quantum-Safe Encryption (v3.7)
 
