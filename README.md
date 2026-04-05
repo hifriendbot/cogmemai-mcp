@@ -99,7 +99,7 @@ CogmemAi scores **91% accuracy** on the [LoCoMo conversational memory benchmark]
 - **Correction learning** — teach your assistant to avoid repeated mistakes
 - **Session reminders** — nudges that surface at the start of your next session
 - **Mandatory rules** — define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
-- **35 tools** — the most complete memory toolkit for Ai coding assistants
+- **35 tools** — the most complete memory toolkit for any Ai system
 
 ## Quick Start
 
