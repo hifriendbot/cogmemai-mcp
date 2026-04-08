@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.13.0';
+export const VERSION = '3.13.1';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -33,7 +33,7 @@ export const SESSION_EXPIRY_SECONDS = 14400; // 4 hours
 export const COMPACTION_FLAG_MAX_AGE = 3600;  // 1 hour
 
 // Network configuration
-export const FETCH_TIMEOUT_MS = 10000;       // 10s for MCP tool API calls
+export const FETCH_TIMEOUT_MS = 30000;       // 30s for MCP tool API calls (recall can take 8-13s on cache miss due to OpenAI embedding latency)
 export const HOOK_FETCH_TIMEOUT_MS = 5000;   // 5s for hook API calls (must not block Claude)
 export const STALE_FLAG_MAX_AGE = 86400;     // 24 hours — clean up old flag files
 
