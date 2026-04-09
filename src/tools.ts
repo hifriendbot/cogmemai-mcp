@@ -110,7 +110,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       content: z
         .string()
         .min(5)
-        .max(2000)
+        .max(10000)
         .describe('The fact to remember (complete sentence)'),
       memory_type: z
         .string()
@@ -201,7 +201,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       content: z
         .string()
         .min(5)
-        .max(2000)
+        .max(10000)
         .describe('The rule to enforce (e.g., "NEVER use -latest model aliases", "ALWAYS apply changes to both class-chat.php AND class-maas.php")'),
       subject: z
         .string()
@@ -652,7 +652,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       content: z
         .string()
         .min(5)
-        .max(2000)
+        .max(10000)
         .optional()
         .describe('New content'),
       importance: z.coerce
@@ -737,7 +737,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .array(
           z.object({
             memory_id: z.coerce.number().int().describe('Memory ID to update'),
-            content: z.string().min(5).max(2000).optional().describe('New content'),
+            content: z.string().min(5).max(10000).optional().describe('New content'),
             importance: z.coerce.number().int().min(1).max(10).optional().describe('New importance'),
             scope: z.enum(['global', 'project']).optional().describe('New scope'),
             memory_type: z.enum(MEMORY_TYPES).optional().describe('New memory type'),
@@ -872,7 +872,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       summary: z
         .string()
         .min(10)
-        .max(2000)
+        .max(10000)
         .describe(
           'Summary of the session — what was done, key decisions, and next steps'
         ),
