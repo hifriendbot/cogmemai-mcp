@@ -11,7 +11,7 @@
  */
 
 import { VERSION, STORAGE_MODE } from './config.js';
-import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop } from './cli.js';
+import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop, runHookPostToolUse } from './cli.js';
 
 // Shared state: latest version from npm (set by checkForUpdate, read by tools)
 export let latestVersion: string | null = null;
@@ -36,8 +36,10 @@ if (subcommand === 'setup') {
     runHookContextReload().catch(() => process.exit(0));
   } else if (hookName === 'stop') {
     runHookStop().catch(() => process.exit(0));
+  } else if (hookName === 'posttooluse') {
+    runHookPostToolUse().catch(() => process.exit(0));
   } else {
-    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload, stop`);
+    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload, stop, posttooluse`);
     process.exit(1);
   }
 } else if (subcommand === 'verify') {

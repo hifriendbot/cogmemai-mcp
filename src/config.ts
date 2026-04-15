@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.14.5';
+export const VERSION = '3.15.0';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
@@ -70,3 +70,15 @@ export const RATE_LIMIT_MAX = 120;
 export const AUTO_EXTRACT_COOLDOWN = 1800;         // 30 minutes between auto-extractions (global)
 export const AUTO_EXTRACT_MIN_USER_MESSAGES = 2;   // Min substantial user messages to trigger
 export const AUTO_EXTRACT_MIN_MSG_LENGTH = 30;     // Min chars for a "substantial" message
+
+// PostToolUse autonomous-memory config (v3.15.0)
+// Events captured by PostToolUse hook are flushed at session end to /cogmemai/extract-events,
+// where server-side Haiku extracts structured memories without Claude's involvement.
+export const POST_TOOL_USE_MAX_FIELD_CHARS = 500;  // Per-field truncation to cap event size
+export const POST_TOOL_USE_MAX_EVENTS = 500;       // Hard cap on events per session log (older events discarded on overflow)
+export const POST_TOOL_USE_SKIP_TOOLS = new Set([  // Tools whose events add no signal for memory extraction
+  'Read',
+  'Glob',
+  'Grep',
+  'ToolSearch',
+]);

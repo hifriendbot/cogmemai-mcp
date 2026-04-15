@@ -14,7 +14,7 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync, appendFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH } from './config.js';
+import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH, POST_TOOL_USE_MAX_FIELD_CHARS, POST_TOOL_USE_MAX_EVENTS, POST_TOOL_USE_SKIP_TOOLS } from './config.js';
 
 // Helper: read session_id from stdin hook input
 function readHookInput(): { session_id: string; transcript_path: string; cwd: string } {
@@ -1499,6 +1499,126 @@ function buildStopSummary(transcriptPath: string, cwd: string, lastMessage: stri
   return parts.join('\n');
 }
 
+// ── PostToolUse hook: autonomous event capture (v3.15.0) ─────────
+// Writes one JSONL line per tool call into a per-session events log.
+// Events are flushed to /cogmemai/extract-events at session end by
+// runHookStop, where server-side Haiku extracts structured memories
+// without needing Claude to call save_memory. This is the mechanism
+// that makes CogmemAi autonomous — saves happen even when Claude skips.
+
+function eventsLogPath(sessionId: string): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'unknown';
+  return join(FLAG_DIR, `events-${safe}.jsonl`);
+}
+
+function truncateField(val: unknown): string {
+  try {
+    const s = typeof val === 'string' ? val : JSON.stringify(val);
+    if (!s) return '';
+    return s.length > POST_TOOL_USE_MAX_FIELD_CHARS
+      ? s.slice(0, POST_TOOL_USE_MAX_FIELD_CHARS) + '...[truncated]'
+      : s;
+  } catch {
+    return '';
+  }
+}
+
+// Redact tool inputs so the event log never stores large file contents.
+// We keep structural info (paths, commands, patterns) but drop bodies.
+function redactToolInput(toolName: string, input: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!input || typeof input !== 'object') return {};
+  const out: Record<string, unknown> = {};
+  // Whitelist of fields that carry signal without dumping bulk content:
+  const safeFields = [
+    'file_path', 'path', 'command', 'description', 'pattern', 'query',
+    'url', 'subject', 'memory_type', 'category', 'importance',
+    'glob', 'type', 'notebook_path', 'cell_id', 'cell_type',
+    'old_string', 'new_string', // include edits so extraction sees the change
+    'content',                   // Write — intentionally truncated below
+  ];
+  for (const k of safeFields) {
+    if (k in input) out[k] = truncateField((input as Record<string, unknown>)[k]);
+  }
+  return out;
+}
+
+export async function runHookPostToolUse(): Promise<void> {
+  try {
+    let stdinData = '';
+    try { stdinData = readFileSync(0, 'utf-8'); } catch { return; }
+    let parsed: Record<string, unknown>;
+    try { parsed = JSON.parse(stdinData); } catch { return; }
+
+    const toolName = String(parsed.tool_name || '');
+    if (!toolName) return;
+    if (POST_TOOL_USE_SKIP_TOOLS.has(toolName)) return;
+
+    const sessionId = String(parsed.session_id || '');
+    if (!sessionId) return;
+
+    const record = {
+      ts: new Date().toISOString(),
+      tool: toolName,
+      input: redactToolInput(toolName, parsed.tool_input as Record<string, unknown>),
+    };
+
+    mkdirSync(FLAG_DIR, { recursive: true });
+    const path = eventsLogPath(sessionId);
+
+    // Hard-cap the file so a runaway session can't fill the disk.
+    try {
+      if (existsSync(path)) {
+        const stat = statSync(path);
+        // ~500 bytes per event avg, cap ≈ 500 * 1024 bytes
+        if (stat.size > POST_TOOL_USE_MAX_EVENTS * 1024) return;
+      }
+    } catch { /* best-effort */ }
+
+    appendFileSync(path, JSON.stringify(record) + '\n');
+  } catch {
+    // Never block Claude's tool-use loop on hook failure
+  }
+}
+
+/**
+ * Flush a session's events log to /cogmemai/extract-events and delete the file.
+ * Called by runHookStop before it saves the session summary. Fire-and-forget
+ * for failures — logged to errors.log for debugging but never blocks.
+ */
+async function flushEventsLog(sessionId: string, projectId: string, apiKey: string): Promise<void> {
+  const path = eventsLogPath(sessionId);
+  if (!existsSync(path)) return;
+
+  let events: unknown[] = [];
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    events = raw.split('\n').filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean) as unknown[];
+  } catch {
+    return;
+  }
+
+  if (events.length === 0) {
+    try { unlinkSync(path); } catch { /* ignore */ }
+    return;
+  }
+
+  const ok = await hookPostJson(
+    `${API_BASE}/cogmemai/extract-events`,
+    apiKey,
+    { events, project_id: projectId, session_id: sessionId },
+    'stop-extract-events'
+  );
+
+  // Always delete the log after flushing — we'd rather lose one batch than
+  // re-send and create duplicate memories. Server dedups via content similarity
+  // but avoiding the round trip saves cost.
+  if (ok) {
+    try { unlinkSync(path); } catch { /* ignore */ }
+  }
+}
+
 export async function runHookStop(): Promise<void> {
   const debugLog = (reason: string, extra: Record<string, unknown> = {}) => {
     try {
@@ -1551,11 +1671,21 @@ export async function runHookStop(): Promise<void> {
 
     if (!summary || summary.length < 20) { debugLog('early_return_summary_too_short', { len: summary.length }); return; }
 
-    debugLog('will_post', { project_id: detectProjectIdForHook(hookInput.cwd), summary_len: summary.length });
+    const projectId = detectProjectIdForHook(hookInput.cwd);
+    debugLog('will_post', { project_id: projectId, summary_len: summary.length });
 
     // Truncate
     if (summary.length > SUMMARY_CONFIG.maxSummaryChars) {
       summary = summary.slice(0, SUMMARY_CONFIG.maxSummaryChars - 3) + '...';
+    }
+
+    // v3.15.0 — Flush PostToolUse events for server-side extraction.
+    // Runs before the session-summary save so any extracted memories
+    // land first; failure here doesn't block the summary.
+    try {
+      await flushEventsLog(sessionId, projectId, apiKey);
+    } catch (err) {
+      debugLog('flush_events_threw', { err: String(err) });
     }
 
     // Save via session-summary API; if that fails, fall back to the proven
@@ -1566,7 +1696,7 @@ export async function runHookStop(): Promise<void> {
     let saved = await hookPostJson(
       `${API_BASE}/cogmemai/session-summary`,
       apiKey,
-      { summary, project_id: detectProjectIdForHook(hookInput.cwd) },
+      { summary, project_id: projectId },
       'stop-session-summary'
     );
 
@@ -1582,7 +1712,7 @@ export async function runHookStop(): Promise<void> {
           subject: `Session Summary ${new Date().toISOString().slice(0, 16)}`,
           importance: 7,
           scope: 'project',
-          project_id: detectProjectIdForHook(hookInput.cwd),
+          project_id: projectId,
         },
         'stop-session-summary-fallback'
       );
@@ -1827,6 +1957,24 @@ export function configureHooks(): { success: boolean; error?: string } {
             type: 'command',
             command: 'cogmemai-mcp hook stop',
             timeout: SUMMARY_CONFIG.hookTimeoutSeconds,
+          },
+        ],
+      });
+    }
+
+    // v3.15.0 — PostToolUse hook (autonomous event capture for server-side extraction)
+    // Fires after every tool call; appends a compact event record to the
+    // session's events log. The Stop hook flushes the log to the server.
+    if (!settings.hooks.PostToolUse) {
+      settings.hooks.PostToolUse = [];
+    }
+    if (!hasCogmemaiHook(settings.hooks.PostToolUse, 'cogmemai-mcp hook posttooluse')) {
+      settings.hooks.PostToolUse.push({
+        hooks: [
+          {
+            type: 'command',
+            command: 'cogmemai-mcp hook posttooluse',
+            timeout: 3,
           },
         ],
       });
