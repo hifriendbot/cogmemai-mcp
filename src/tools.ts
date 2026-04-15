@@ -42,9 +42,64 @@ const MAX_REMINDER_CALLS = 3; // Stop nagging after this many tool calls
 
 const CONTEXT_REMINDER = '\n\n[!] REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
 
+// ─── Memory Debt Tracker ──────────────────────────────────────
+// Counts non-save cogmemai tool calls since the last save. When the count
+// crosses a threshold, tool responses are prefixed with a forcing nudge so
+// the model cannot ignore it. This is the safety net for "Claude read all
+// session, saved nothing" failures observed in production.
+
+const DEBT_WARN_THRESHOLD = 8;
+const DEBT_URGENT_THRESHOLD = 15;
+const DEBT_FILE = join(FLAG_DIR, 'debt.json');
+
+let debtCount = 0;
+(function loadDebt() {
+  try {
+    if (existsSync(DEBT_FILE)) {
+      const data = JSON.parse(readFileSync(DEBT_FILE, 'utf-8'));
+      const age = Math.floor(Date.now() / 1000) - (data.timestamp || 0);
+      // Debt older than 2 hours is stale — fresh session, fresh counter
+      if (age < 7200 && typeof data.count === 'number') debtCount = data.count;
+    }
+  } catch { /* corrupt file — start fresh */ }
+})();
+
+function persistDebt(): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    writeFileSync(DEBT_FILE, JSON.stringify({
+      count: debtCount,
+      timestamp: Math.floor(Date.now() / 1000),
+    }));
+  } catch { /* non-critical */ }
+}
+
+/**
+ * Reset debt counter — called by save-class tools after a successful save.
+ * Exported so individual save tool handlers can invoke it.
+ */
+export function resetDebt(): void {
+  debtCount = 0;
+  persistDebt();
+}
+
+function debtNudge(): string {
+  if (debtCount >= DEBT_URGENT_THRESHOLD) {
+    return `\n\n⚠️ MEMORY DEBT CRITICAL: ${debtCount} cogmemai operations since last save_memory. You are losing context that will not be recoverable if this session ends. STOP the current task. Call save_memory NOW with a summary of recent work — file paths edited, decisions made, bugs found, what you learned. Reset the counter before your next user-facing response. Sessions have been lost in production because this nudge was ignored.`;
+  }
+  if (debtCount >= DEBT_WARN_THRESHOLD) {
+    return `\n\n⚠️ MEMORY DEBT: ${debtCount} cogmemai tool calls since last save. Call save_memory before your next user-facing response with a summary of what you've learned or changed this session. Do not rely on Stop hooks — they are best-effort and can fail silently.`;
+  }
+  return '';
+}
+
 function wrapResult(result: unknown, skipReminder = false): { content: Array<{ type: 'text'; text: string }> } {
   let text = JSON.stringify(result, null, 2);
   toolCallCount++;
+  debtCount++;
+  persistDebt();
+  const nudge = debtNudge();
+  if (nudge) text = nudge + '\n\n' + text;
   if (!contextLoaded && !skipReminder && toolCallCount <= MAX_REMINDER_CALLS) {
     text += CONTEXT_REMINDER;
   }
@@ -183,6 +238,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (tags && tags.length > 0) body.tags = tags;
         if (ttl) body.ttl = ttl;
         const result = await storage.saveMemory(body);
+        resetDebt();
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -237,6 +293,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         };
         if (tags && tags.length > 0) body.tags = tags;
         const result = await storage.saveMemory(body);
+        resetDebt();
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -884,6 +941,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           summary,
           project_id: projectId,
         });
+        resetDebt();
         return wrapResult(result, true);
       } catch (error) {
         return wrapError(error);
@@ -1106,6 +1164,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           project_id: projectId,
           tags: [`priority-${priority}`, `status-${status}`],
         });
+        resetDebt();
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -1313,6 +1372,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           project_id: projectId,
           tags: ['correction'],
         });
+        resetDebt();
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
