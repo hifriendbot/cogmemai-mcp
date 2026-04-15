@@ -533,11 +533,29 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
   const hookResult = configureHooks();
   if (hookResult.success) {
-    success('Hooks installed (compaction recovery + auto-session-summary)');
+    success('Hooks installed (compaction recovery + auto-session-summary + autonomous event capture)');
     log(`  ${DIM}Context auto-saves before compaction, reloads after, and sessions save automatically${RESET}`);
   } else {
     warn(`Could not install hooks: ${hookResult.error}`);
     log(`  ${DIM}CogmemAi will still work, but auto-recovery and auto-summary won't be active${RESET}`);
+  }
+
+  // Sync the global binary so hooks (which invoke the bare `cogmemai-mcp`
+  // command) run the same version as this setup script. Without this, users
+  // who originally installed with `npm install -g` can end up with a stale
+  // global binary that doesn't recognize hook subcommands added in later
+  // versions (e.g. v3.15.0 added `posttooluse` — old globals fail silently).
+  // Best-effort: if the install fails (permissions/network/missing npm), we
+  // warn and tell the user the exact command to run. Never block setup.
+  try {
+    execSync('npm install -g cogmemai-mcp@latest', {
+      stdio: 'pipe',
+      timeout: 60000,
+    });
+    success(`Global binary synced to v${VERSION}`);
+  } catch (err: any) {
+    warn('Could not auto-sync global binary — hooks may run a stale version');
+    log(`  ${DIM}Fix manually: ${CYAN}npm install -g cogmemai-mcp@latest${RESET}`);
   }
 
   // Step 6: Configure auto-memory loading via CLAUDE.md
