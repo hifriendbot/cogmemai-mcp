@@ -765,7 +765,7 @@ export async function runHookPrecompact(): Promise<void> {
     let saved = await hookPostJson(
       `${API_BASE}/cogmemai/session-summary`,
       apiKey,
-      { summary },
+      { summary, project_id: detectProjectIdForHook(cwd) },
       'precompact-session-summary'
     );
     if (!saved) {
@@ -1544,7 +1544,7 @@ export async function runHookStop(): Promise<void> {
     let saved = await hookPostJson(
       `${API_BASE}/cogmemai/session-summary`,
       apiKey,
-      { summary },
+      { summary, project_id: detectProjectIdForHook(hookInput.cwd) },
       'stop-session-summary'
     );
 
