@@ -114,6 +114,44 @@ async function hookFetch(url: string, options: RequestInit = {}): Promise<Respon
 }
 
 /**
+ * POST JSON to a cogmemai hook endpoint. Returns true iff the server
+ * responded 2xx. Non-2xx responses and thrown errors are logged to
+ * errors.log with status + response body. Callers use the boolean return
+ * to decide whether to fall back, retry, or skip flag writes.
+ *
+ * Replaces the old pattern of bare try/catch around hookFetch, which
+ * silently discarded 4xx/5xx responses (fetch only throws on network
+ * failure or timeout, not HTTP error status).
+ */
+async function hookPostJson(
+  url: string,
+  apiKey: string,
+  body: unknown,
+  hookName: string
+): Promise<boolean> {
+  try {
+    const res = await hookFetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let errBody = '';
+      try { errBody = (await res.text()).slice(0, 500); } catch { /* body unreadable */ }
+      logHookError(hookName, new Error(`HTTP ${res.status} from ${url} — ${errBody}`));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logHookError(hookName, err);
+    return false;
+  }
+}
+
+/**
  * Clean up stale flag files in ~/.cogmemai/ older than STALE_FLAG_MAX_AGE.
  * Runs opportunistically during hooks — never fails loudly.
  */
@@ -727,18 +765,30 @@ export async function runHookPrecompact(): Promise<void> {
       summary = summary.slice(0, 1997) + '...';
     }
 
-    // Save session summary via API (with timeout — never block compaction)
-    try {
-      await hookFetch(`${API_BASE}/cogmemai/session-summary`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+    // Save session summary via API — check response.ok and fall back to
+    // /cogmemai/store if the summary endpoint errors. See Stop hook for
+    // the same pattern and rationale.
+    let saved = await hookPostJson(
+      `${API_BASE}/cogmemai/session-summary`,
+      apiKey,
+      { summary },
+      'precompact-session-summary'
+    );
+    if (!saved) {
+      saved = await hookPostJson(
+        `${API_BASE}/cogmemai/store`,
+        apiKey,
+        {
+          content: summary,
+          memory_type: 'session_summary',
+          category: 'general',
+          subject: `Pre-Compact Summary ${new Date().toISOString().slice(0, 16)}`,
+          importance: 7,
+          scope: 'project',
+          project_id: detectProjectIdForHook(cwd),
         },
-        body: JSON.stringify({ summary }),
-      });
-    } catch {
-      // Non-critical
+        'precompact-session-summary-fallback'
+      );
     }
 
     // Write session-specific flag file for context-reload hook
@@ -1283,24 +1333,19 @@ async function autoExtractFromSession(
   // Detect project ID for scoping
   const projectId = detectProjectIdForHook(cwd);
 
-  // Call extract endpoint (fire-and-forget with timeout)
-  try {
-    await hookFetch(`${API_BASE}/cogmemai/extract`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        user_message: payload.userMessages,
-        assistant_response: payload.assistantResponses,
-        project_id: projectId,
-      }),
-    });
-  } catch {
-    // Timeout or network failure — non-critical
-    return;
-  }
+  // Call extract endpoint. Failures are logged (previously swallowed
+  // silently, which hid extraction-endpoint outages for days).
+  const ok = await hookPostJson(
+    `${API_BASE}/cogmemai/extract`,
+    apiKey,
+    {
+      user_message: payload.userMessages,
+      assistant_response: payload.assistantResponses,
+      project_id: projectId,
+    },
+    'auto-extract'
+  );
+  if (!ok) return;
 
   // Update cooldown (even if extract returned errors — avoid hammering)
   mkdirSync(FLAG_DIR, { recursive: true });
@@ -1480,26 +1525,49 @@ export async function runHookStop(): Promise<void> {
       summary = summary.slice(0, SUMMARY_CONFIG.maxSummaryChars - 3) + '...';
     }
 
-    // Save via API (fire-and-forget — never block Claude from stopping)
-    try {
-      await hookFetch(`${API_BASE}/cogmemai/session-summary`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+    // Save via session-summary API; if that fails, fall back to the proven
+    // /cogmemai/store endpoint so the session still lands as a memory.
+    // Previously this was fire-and-forget with silent failure — we then
+    // wrote a success flag even when no memory was saved, producing the
+    // "Stop hook fired but nothing saved" failure mode.
+    let saved = await hookPostJson(
+      `${API_BASE}/cogmemai/session-summary`,
+      apiKey,
+      { summary },
+      'stop-session-summary'
+    );
+
+    if (!saved) {
+      // Fallback: save as a regular memory via /cogmemai/store (proven-working endpoint).
+      saved = await hookPostJson(
+        `${API_BASE}/cogmemai/store`,
+        apiKey,
+        {
+          content: summary,
+          memory_type: 'session_summary',
+          category: 'general',
+          subject: `Session Summary ${new Date().toISOString().slice(0, 16)}`,
+          importance: 7,
+          scope: 'project',
+          project_id: detectProjectIdForHook(hookInput.cwd),
         },
-        body: JSON.stringify({ summary }),
-      });
-    } catch {
-      // Network failure — non-critical
+        'stop-session-summary-fallback'
+      );
     }
 
-    // Write flag so we don't save again this session
-    mkdirSync(FLAG_DIR, { recursive: true });
-    writeFileSync(flag, JSON.stringify({
-      timestamp: Math.floor(Date.now() / 1000),
-      session_id: sessionId,
-    }));
+    // Write flag only if we actually saved. Previously the flag was written
+    // unconditionally, which meant a failed save would never retry — and
+    // there was no way to tell a successful session from a silent failure.
+    if (saved) {
+      mkdirSync(FLAG_DIR, { recursive: true });
+      writeFileSync(flag, JSON.stringify({
+        timestamp: Math.floor(Date.now() / 1000),
+        session_id: sessionId,
+        saved: true,
+      }));
+    } else {
+      logHookError('stop', new Error(`Both session-summary and fallback store failed for session ${sessionId}`));
+    }
 
     // Auto-extract learnings from the session (separate from summary)
     try {
