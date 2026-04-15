@@ -256,25 +256,19 @@ async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; data?: an
 }
 
 async function saveVersionMemory(apiKey: string): Promise<void> {
-  try {
-    await hookFetch(`${API_BASE}/cogmemai/store`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content: `CogmemAi MCP server v${VERSION} is installed with fetch timeouts, hook error logging, stale flag cleanup, and auto-session summaries.`,
-        memory_type: 'dependency',
-        category: 'tooling',
-        subject: 'cogmemai_version',
-        importance: 6,
-        scope: 'global',
-      }),
-    });
-  } catch {
-    // Non-critical — don't fail setup if this doesn't work
-  }
+  await hookPostJson(
+    `${API_BASE}/cogmemai/store`,
+    apiKey,
+    {
+      content: `CogmemAi MCP server v${VERSION} is installed with fetch timeouts, hook error logging, stale flag cleanup, and auto-session summaries.`,
+      memory_type: 'dependency',
+      category: 'tooling',
+      subject: 'cogmemai_version',
+      importance: 6,
+      scope: 'global',
+    },
+    'setup-save-version'
+  );
 }
 
 function isClaudeInstalled(): boolean {
@@ -972,12 +966,18 @@ export async function runHookContextReload(): Promise<void> {
 
     // Fetch project context from API (limit to 20 memories for hook injection)
     const contextLimit = isPostCompaction ? 15 : 20;
-    const res = await hookFetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    let res: Response;
+    try {
+      res = await hookFetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (err) {
+      logHookError('context-reload', err);
+      return;
+    }
 
     // Clean up compaction flag
     if (isPostCompaction) {
@@ -997,7 +997,12 @@ export async function runHookContextReload(): Promise<void> {
       last_smart_topics: [],
     }));
 
-    if (!res.ok) return;
+    if (!res.ok) {
+      let errBody = '';
+      try { errBody = (await res.text()).slice(0, 500); } catch { /* body unreadable */ }
+      logHookError('context-reload', new Error(`HTTP ${res.status} from /cogmemai/context — ${errBody}`));
+      return;
+    }
 
     const data = await res.json() as {
       formatted_context?: string;
@@ -1195,11 +1200,17 @@ async function trySmartRecall(
         limit: 3,
       }),
     });
-  } catch {
-    return; // Network failure — non-critical
+  } catch (err) {
+    logHookError('smart-recall', err);
+    return;
   }
 
-  if (!res.ok) return;
+  if (!res.ok) {
+    let errBody = '';
+    try { errBody = (await res.text()).slice(0, 500); } catch { /* body unreadable */ }
+    logHookError('smart-recall', new Error(`HTTP ${res.status} from /cogmemai/smart-recall — ${errBody}`));
+    return;
+  }
 
   const data = await res.json() as {
     memories?: Array<{ id?: number; content: string; subject: string; importance: number; memory_type: string }>;
