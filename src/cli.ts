@@ -11,7 +11,7 @@
 
 import { createInterface } from 'readline';
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync, appendFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync, statSync, appendFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH } from './config.js';
@@ -69,7 +69,18 @@ function detectProjectIdForHook(cwd: string): string {
       .replace(/^https?:\/\/[^/]+\//, '')
       .replace(/^git@[^:]+:/, '');
   } catch {
-    const parts = (cwd || process.cwd()).split(/[\\/]/);
+    // Normalize to filesystem-canonical case on Windows so this matches what
+    // the MCP tool-call path (detectProjectId) produces. Without realpathSync.native
+    // the basename case tracks however the path was typed at the shell, which
+    // diverges from the long-running MCP server's cached project_id.
+    let resolved = cwd || process.cwd();
+    try {
+      // @ts-ignore — .native is present on Windows; regular realpathSync preserves input case
+      resolved = (realpathSync as any).native ? (realpathSync as any).native(resolved) : realpathSync(resolved);
+    } catch {
+      // keep original if realpath fails
+    }
+    const parts = resolved.split(/[\\/]/);
     return parts[parts.length - 1] || 'unknown';
   }
 }

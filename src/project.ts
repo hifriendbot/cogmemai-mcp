@@ -6,6 +6,7 @@
  */
 
 import { execSync } from 'child_process';
+import { realpathSync } from 'fs';
 
 let cachedProjectId: string | null = null;
 
@@ -33,8 +34,18 @@ export function detectProjectId(): string {
       .replace(/^https?:\/\/[^/]+\//, '')
       .replace(/^git@[^:]+:/, '');
   } catch {
-    // No git remote — use directory name
-    const parts = process.cwd().split(/[\\/]/);
+    // No git remote — use directory name, normalized to filesystem-canonical case
+    // (on Windows, process.cwd() case tracks shell input; realpathSync.native gives
+    // the real folder casing, which must match what the Stop hook produces so saves
+    // tag the same project_id).
+    let resolved = process.cwd();
+    try {
+      // @ts-ignore — .native present on Windows
+      resolved = (realpathSync as any).native ? (realpathSync as any).native(resolved) : realpathSync(resolved);
+    } catch {
+      // keep process.cwd() on failure
+    }
+    const parts = resolved.split(/[\\/]/);
     cachedProjectId = parts[parts.length - 1] || 'unknown';
   }
 
