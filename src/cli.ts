@@ -1500,47 +1500,58 @@ function buildStopSummary(transcriptPath: string, cwd: string, lastMessage: stri
 }
 
 export async function runHookStop(): Promise<void> {
+  const debugLog = (reason: string, extra: Record<string, unknown> = {}) => {
+    try {
+      mkdirSync(FLAG_DIR, { recursive: true });
+      const entry = JSON.stringify({ ts: new Date().toISOString(), event: 'stop', reason, ...extra }) + '\n';
+      appendFileSync(join(FLAG_DIR, 'hook-debug.log'), entry);
+    } catch { /* never throw from debug */ }
+  };
+
   try {
     const hookInput = readStopHookInput();
+    debugLog('entered', {
+      has_session_id: !!hookInput.session_id,
+      has_transcript: !!hookInput.transcript_path,
+      has_cwd: !!hookInput.cwd,
+      cwd: hookInput.cwd || null,
+      stop_hook_active: !!hookInput.stop_hook_active,
+    });
 
-    // CRITICAL: If stop_hook_active is true, a previous Stop hook already ran.
-    // Exit immediately to prevent infinite loops.
-    if (hookInput.stop_hook_active) return;
+    if (hookInput.stop_hook_active) { debugLog('early_return_stop_hook_active'); return; }
 
     const sessionId = hookInput.session_id;
-    if (!sessionId) return;
+    if (!sessionId) { debugLog('early_return_no_session_id'); return; }
 
-    // Check if we already saved a summary for this session recently
     const flag = summaryFlagPath(sessionId);
     if (existsSync(flag)) {
       try {
         const flagData = JSON.parse(readFileSync(flag, 'utf-8'));
         const age = Math.floor(Date.now() / 1000) - flagData.timestamp;
-        if (age < SUMMARY_CONFIG.cooldownSeconds) return;
-      } catch {
-        // Corrupt flag — continue and save
-      }
+        if (age < SUMMARY_CONFIG.cooldownSeconds) { debugLog('early_return_cooldown', { age }); return; }
+      } catch { /* Corrupt flag — continue and save */ }
     }
 
-    // Check if session is substantial enough to save
     const { transcript_path } = hookInput;
-    if (!transcript_path) return;
+    if (!transcript_path) { debugLog('early_return_no_transcript_path'); return; }
 
     const isSubstantial = checkSessionSubstantial(transcript_path);
-    if (!isSubstantial) return;
+    if (!isSubstantial) { debugLog('early_return_not_substantial', { transcript_path }); return; }
 
     const apiKey = resolveApiKey();
-    if (!apiKey) return;
+    if (!apiKey) { debugLog('early_return_no_api_key'); return; }
 
-    // Build summary from transcript
     let summary = '';
     try {
       summary = buildStopSummary(transcript_path, hookInput.cwd, hookInput.last_assistant_message);
-    } catch {
+    } catch (err) {
+      debugLog('early_return_buildStopSummary_threw', { err: String(err) });
       return;
     }
 
-    if (!summary || summary.length < 20) return;
+    if (!summary || summary.length < 20) { debugLog('early_return_summary_too_short', { len: summary.length }); return; }
+
+    debugLog('will_post', { project_id: detectProjectIdForHook(hookInput.cwd), summary_len: summary.length });
 
     // Truncate
     if (summary.length > SUMMARY_CONFIG.maxSummaryChars) {

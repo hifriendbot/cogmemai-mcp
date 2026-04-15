@@ -5,7 +5,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 
-export const VERSION = '3.14.4';
+export const VERSION = '3.14.5';
 
 export const API_BASE =
   process.env.COGMEMAI_API_URL?.replace(/\/+$/, '') ||
