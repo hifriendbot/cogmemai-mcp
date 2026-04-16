@@ -14,9 +14,17 @@
   <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams. 91% accuracy on the LoCoMo benchmark — above human performance. Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays.
+CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams — and captures knowledge autonomously, even when your Ai forgets to save. 91% accuracy on the LoCoMo benchmark — above human performance. Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays. Not just one score on a test — the most complete Ai memory system available.
 
 ## What's New in v3
+
+### Autonomous Memory — Your Ai Doesn't Decide Whether to Save Anymore (v3.15)
+
+Every memory system has the same hidden failure mode: **the Ai has to choose to save, and under pressure it doesn't.** You can bake instructions into system prompts. You can nudge. But when your Ai is head-down on a coding task, it forgets to save — and the decisions you made two hours ago vanish when the context compacts.
+
+CogmemAi v3.15 moves the decision out of the Ai's hands entirely. Your coding sessions are captured at the infrastructure level — decisions, file changes, bug fixes, and deployments land in memory without a single prompt. At session end, an intelligence pass distills them into structured memories: the right types, the right importance scores, the right scopes. Your Ai never sees this happen.
+
+The result: a day of heavy coding produces 15–20 quality memories instead of 3. Future sessions pick up seamlessly. Your Ai stops re-litigating architectural choices you already made. **Stop reminding your Ai to remember. It just does.**
 
 ### Think Before You Speak — Proactive Memory Recall (v3.12)
 
@@ -99,7 +107,8 @@ CogmemAi scores **91% accuracy** on the [LoCoMo conversational memory benchmark]
 - **Correction learning** — teach your assistant to avoid repeated mistakes
 - **Session reminders** — nudges that surface at the start of your next session
 - **Mandatory rules** — define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
-- **35 tools** — the most complete memory toolkit for any Ai system
+- **Autonomous memory** — captures work even when your Ai skips saves
+- **35+ tools** — the most complete memory toolkit for any Ai system
 
 ## Quick Start
 
@@ -137,6 +146,7 @@ CogmemAi gives your Ai assistant a real memory system:
 - **Document ingestion** — feed in READMEs and docs to instantly build project context
 - **Project scoping** — memories tied to specific repos, plus global preferences that follow you everywhere
 - **Smart context** — intelligently ranked for maximum relevance to your current work
+- **Autonomous memory capture** — saves knowledge even when your Ai forgets to call save. Decisions, file changes, and fixes land in memory without prompting
 - **Compaction recovery** — survives Claude Code context compaction automatically
 - **Token-efficient** — compact context loading that won't bloat your conversation
 - **Zero setup** — no databases, no Docker, no Python, no vector stores
