@@ -1125,6 +1125,153 @@ export async function runHookContextReload(): Promise<void> {
   } catch (err) {
     logHookError('context-reload', err);
     console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+}
+
+// ── SessionStart hook: one-shot context injection at session open ─────
+//
+// Fires exactly once when Claude Code starts/resumes/clears a session.
+// Unlike UserPromptSubmit (which fires per-message and gates on a session
+// marker), this event is unambiguous: it IS the session start. Injects
+// top memories into Claude's initial context so they're present before
+// Claude responds to the first user message — no tool call required.
+//
+// Leaves a session marker so the subsequent UserPromptSubmit hook sees
+// a fresh marker and skips duplicate injection (falls into smart-recall
+// branch for mid-session topic-aware recall). Post-compaction context
+// recovery is still owned by UserPromptSubmit + the compaction flag —
+// SessionStart does NOT fire after compaction.
+
+export async function runHookSessionStart(): Promise<void> {
+  try {
+    const hookInput = readHookInput();
+    const sessionId = hookInput.session_id;
+
+    const apiKey = resolveApiKey();
+    if (!apiKey) return;
+
+    // Fetch project context (same limit as new-session branch of context-reload)
+    const contextLimit = 20;
+    let res: Response;
+    try {
+      res = await hookFetch(`${API_BASE}/cogmemai/context?limit=${contextLimit}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (err) {
+      logHookError('sessionstart', err);
+      return;
+    }
+
+    // Write session marker so UserPromptSubmit skips re-injection on the
+    // first user message (avoids double-loading the same context).
+    const projectId = detectProjectIdForHook(hookInput.cwd);
+    const marker = sessionMarkerPath(sessionId);
+    try {
+      mkdirSync(FLAG_DIR, { recursive: true });
+      writeFileSync(marker, JSON.stringify({
+        timestamp: Math.floor(Date.now() / 1000),
+        session_id: sessionId,
+        project_id: projectId,
+        last_smart_recall: 0,
+        last_smart_topics: [],
+      }));
+    } catch (err) {
+      logHookError('sessionstart', err);
+    }
+
+    if (!res.ok) {
+      let errBody = '';
+      try { errBody = (await res.text()).slice(0, 500); } catch { /* body unreadable */ }
+      logHookError('sessionstart', new Error(`HTTP ${res.status} from /cogmemai/context — ${errBody}`));
+      return;
+    }
+
+    const data = await res.json() as {
+      formatted_context?: string;
+      total_count?: number;
+      project_memories?: Array<{ content: string; subject: string; importance: number }>;
+      global_memories?: Array<{ content: string; subject: string; importance: number }>;
+      recalls_total?: number;
+      last_session?: string | null;
+      health_score?: { score: number; factors: string[] };
+    };
+
+    // Build context string — same format as context-reload's new-session branch
+    let context = '';
+    if (data.formatted_context) {
+      context = data.formatted_context;
+    } else {
+      const parts: string[] = [];
+      if (data.project_memories) {
+        for (const m of data.project_memories) {
+          parts.push(`- [${m.subject}] ${m.content}`);
+        }
+      }
+      if (data.global_memories) {
+        for (const m of data.global_memories) {
+          parts.push(`- [${m.subject}] ${m.content}`);
+        }
+      }
+      context = parts.join('\n');
+    }
+
+    // New project with no memories — suggest README ingestion
+    if (!context || (data.total_count !== undefined && data.total_count === 0)) {
+      const readmeCandidates = ['README.md', 'readme.md', 'README.rst', 'README.txt'];
+      let readmeFound = '';
+      for (const name of readmeCandidates) {
+        const readmePath = join(hookInput.cwd, name);
+        if (existsSync(readmePath)) {
+          readmeFound = name;
+          break;
+        }
+      }
+      if (readmeFound) {
+        const output = JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'SessionStart',
+            additionalContext: `CogmemAi — New project detected with no memories yet. Found ${readmeFound} in the project root. Consider running ingest_document to quickly build project context from it. You can also save_memory to start building your knowledge base.`,
+          },
+        });
+        console.log(output);
+      }
+      return;
+    }
+
+    // Cap context to prevent bloating the session's initial context
+    const maxChars = 6000;
+    if (context.length > maxChars) {
+      context = context.slice(0, maxChars - 80) + '\n\n[Condensed — use recall_memories to search for specific past context]';
+    }
+
+    const extras: string[] = [];
+    if (data.last_session) {
+      extras.push(`\n**Last session:** ${data.last_session}`);
+    }
+    if (data.recalls_total && data.recalls_total > 0) {
+      extras.push(`CogmemAi has surfaced memories ${data.recalls_total} times for you.`);
+    }
+    if (data.health_score) {
+      const h = data.health_score;
+      extras.push(`Memory health: ${h.score}/100${h.factors.length > 0 ? ' — ' + h.factors[0] : ''}`);
+    }
+    const statsLine = extras.length > 0 ? '\n\n' + extras.join(' | ') : '';
+    const instruction = '\n\nIMPORTANT: Your memories are loaded above. Use recall_memories to search for specific past context. Save new learnings with save_memory.';
+
+    const output = JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: `CogmemAi — Project context loaded from previous sessions. Your memories have been reloaded:\n\n${context}${statsLine}${instruction}`,
+      },
+    });
+    console.log(output);
+  } catch (err) {
+    logHookError('sessionstart', err);
+    console.error(`CogmemAi hook error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -1998,6 +2145,26 @@ export function configureHooks(): { success: boolean; error?: string } {
       });
     }
 
+    // v3.16.0 — SessionStart hook (guaranteed one-shot context injection).
+    // Fires exactly once when Claude Code starts/resumes/clears a session,
+    // regardless of whether the agent thinks to call get_project_context.
+    // This is the parity feature with file-based auto-memory: memories are
+    // present in Claude's initial context before it responds to anything.
+    if (!settings.hooks.SessionStart) {
+      settings.hooks.SessionStart = [];
+    }
+    if (!hasCogmemaiHook(settings.hooks.SessionStart, 'cogmemai-mcp hook sessionstart')) {
+      settings.hooks.SessionStart.push({
+        hooks: [
+          {
+            type: 'command',
+            command: 'cogmemai-mcp hook sessionstart',
+            timeout: 10,
+          },
+        ],
+      });
+    }
+
     // Create ~/.cogmemai/ directory
     mkdirSync(FLAG_DIR, { recursive: true });
 
@@ -2025,9 +2192,11 @@ export function showHelp(): void {
   log(`    cogmemai-mcp                    Start MCP server (stdio transport)`);
   log('');
   log(`  ${BOLD}Hooks:${RESET}`);
-  log(`    cogmemai-mcp hook precompact    Save context before compaction`);
-  log(`    cogmemai-mcp hook context-reload Reload context after compaction/new session`);
-  log(`    cogmemai-mcp hook stop          Auto-save session summary on exit`);
+  log(`    cogmemai-mcp hook sessionstart   Inject top memories at session open (v3.16+)`);
+  log(`    cogmemai-mcp hook precompact     Save context before compaction`);
+  log(`    cogmemai-mcp hook context-reload Reload context after compaction / smart recall`);
+  log(`    cogmemai-mcp hook posttooluse    Capture tool events for autonomous memory`);
+  log(`    cogmemai-mcp hook stop           Auto-save session summary on exit`);
   log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);
