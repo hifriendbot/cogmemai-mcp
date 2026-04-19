@@ -14,7 +14,7 @@
   <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams — and captures knowledge autonomously, even when your Ai forgets to save. **95.10% accuracy on LongMemEval — top published score.** 91% on LoCoMo. Both above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays. Not just one score on a test — the most complete Ai memory system available.
+CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams — and captures knowledge autonomously, even when your Ai forgets to save. **95.10% accuracy on LongMemEval — top published score on the field's hardest long-term memory benchmark.** 91% on LoCoMo, above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays. Not just one score on a test — the most complete Ai memory system available.
 
 ## What's New in v3
 
@@ -82,9 +82,9 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 - **Confidence tracking** — each skill has a confidence score that rises when it works and drops when it doesn't. Low-confidence skills are automatically retired
 - **Self-evaluation** — skills periodically review themselves against new evidence and adapt, strengthen, or retire as your practices evolve
 
-### Intelligence Engine — 95.10% on LongMemEval, 91% on LoCoMo (Above Human Performance)
+### Intelligence Engine — 95.10% on LongMemEval, 91% on LoCoMo
 
-CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162/LongMemEval)** — the top published score on the field's hardest long-term memory benchmark — and **91% accuracy on [LoCoMo](https://github.com/snap-research/locomo)** with a 100% retrieval hit rate. Both results are above human performance (87.9%). Two benchmarks, two #1-tier scores. CogmemAi finds the right memories when you need them.
+CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162/LongMemEval)** — the top published score on the field's hardest long-term memory benchmark — and **91% accuracy on [LoCoMo](https://github.com/snap-research/locomo)** with a 100% retrieval hit rate, above human performance (87.9%). Two benchmarks, two #1-tier scores. CogmemAi finds the right memories when you need them.
 
 - **Precision reranking** — every recall runs a second-pass reranker that re-scores candidates for precision, balanced with the initial ranking signal to surface the most relevant memory first
 - **Self-improving recall** — memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
