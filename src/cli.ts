@@ -16,13 +16,16 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH, POST_TOOL_USE_MAX_FIELD_CHARS, POST_TOOL_USE_MAX_EVENTS, POST_TOOL_USE_SKIP_TOOLS } from './config.js';
 
-// Helper: read session_id from stdin hook input
-function readHookInput(): { session_id: string; transcript_path: string; cwd: string } {
+// Helper: read session_id from stdin hook input.
+// `prompt` is populated for UserPromptSubmit hooks (Claude Code passes the
+// raw user prompt text alongside the standard fields). Other hook types
+// leave it empty.
+function readHookInput(): { session_id: string; transcript_path: string; cwd: string; prompt: string } {
   let stdinData = '';
   try {
     stdinData = readFileSync(0, 'utf-8');
   } catch {
-    return { session_id: '', transcript_path: '', cwd: '' };
+    return { session_id: '', transcript_path: '', cwd: '', prompt: '' };
   }
   try {
     const input = JSON.parse(stdinData);
@@ -30,9 +33,10 @@ function readHookInput(): { session_id: string; transcript_path: string; cwd: st
       session_id: input.session_id || '',
       transcript_path: input.transcript_path || '',
       cwd: input.cwd || '',
+      prompt: typeof input.prompt === 'string' ? input.prompt : '',
     };
   } catch {
-    return { session_id: '', transcript_path: '', cwd: '' };
+    return { session_id: '', transcript_path: '', cwd: '', prompt: '' };
   }
 }
 
@@ -939,6 +943,13 @@ export async function runHookContextReload(): Promise<void> {
   try {
     const hookInput = readHookInput();
     const sessionId = hookInput.session_id;
+
+    // v3.17.0 — capture the user prompt FIRST, before any early-return paths.
+    // The autonomous extractor at Stop time sees this alongside tool events,
+    // closing the gap where preference-selection moments expressed in prose
+    // (option picks, corrections, approvals) were invisible to the pipeline.
+    captureUserMessageEvent(sessionId, hookInput.prompt);
+
     const compactionFlag = flagPath(sessionId);
     const marker = sessionMarkerPath(sessionId);
 
@@ -1674,6 +1685,41 @@ function buildStopSummary(transcriptPath: string, cwd: string, lastMessage: stri
 function eventsLogPath(sessionId: string): string {
   const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'unknown';
   return join(FLAG_DIR, `events-${safe}.jsonl`);
+}
+
+// v3.17.0 — UserPromptSubmit autonomous capture.
+// PostToolUse only sees tool calls, so preference-selection moments expressed
+// in prose ("2", "no don't", "perfect, keep doing that") are invisible to the
+// Stop-time extractor. This helper appends user-prompt text to the SAME events
+// log, letting Haiku see the full conversation.
+function captureUserMessageEvent(sessionId: string, prompt: string): void {
+  try {
+    if (!sessionId || !prompt) return;
+    const text = prompt.trim();
+    if (!text) return;
+
+    mkdirSync(FLAG_DIR, { recursive: true });
+    const path = eventsLogPath(sessionId);
+
+    // Honor the same disk-cap as PostToolUse so a runaway session can't fill
+    // the disk. Drop the message rather than rotate — older signal is more
+    // valuable than newer signal in a runaway loop.
+    try {
+      if (existsSync(path)) {
+        const stat = statSync(path);
+        if (stat.size > POST_TOOL_USE_MAX_EVENTS * 1024) return;
+      }
+    } catch { /* best-effort */ }
+
+    const record = {
+      ts: new Date().toISOString(),
+      type: 'user_message',
+      text: truncateField(text),
+    };
+    appendFileSync(path, JSON.stringify(record) + '\n');
+  } catch {
+    // Never block Claude's prompt loop on hook failure
+  }
 }
 
 function truncateField(val: unknown): string {
