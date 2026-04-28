@@ -106,6 +106,41 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
   return { content: [{ type: 'text' as const, text }] };
 }
 
+// v3.19.0 — Surface a merge suggestion when save_* returns a near-duplicate.
+// The backend already attaches `potentially_related` (auto-linking signal),
+// but the agent rarely acts on it and slow drift toward duplicates degrades
+// recall. This adds an explicit `merge_suggestion` field at high similarity
+// so the next-turn agent can choose update_memory over keep-both.
+const MERGE_SUGGESTION_THRESHOLD = 0.85;
+
+function annotateMergeSuggestion(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const r = result as Record<string, unknown>;
+  const related = r.potentially_related as Record<string, unknown> | undefined;
+  if (!related || typeof related !== 'object') return result;
+
+  const sim = typeof related.similarity === 'number' ? related.similarity : 0;
+  if (sim < MERGE_SUGGESTION_THRESHOLD) return result;
+
+  const candidateId = related.memory_id;
+  const newId = r.memory_id;
+  const candidateSubject = typeof related.subject === 'string' ? related.subject : '';
+  const isNearIdentical = sim >= 0.95;
+
+  return {
+    ...r,
+    merge_suggestion: {
+      reason: isNearIdentical ? 'near-identical' : 'high-similarity',
+      similarity: Number(sim.toFixed(3)),
+      candidate_memory_id: candidateId,
+      candidate_subject: candidateSubject,
+      recommendation: isNearIdentical
+        ? `This memory is near-identical to memory #${candidateId}. Consider calling update_memory(memory_id=${candidateId}, content=...) to merge — keeping near-duplicates degrades recall quality. If they are genuinely distinct facts, call feedback_memory(memory_id=${newId}, kind="useful") to suppress this suggestion.`
+        : `High similarity (${sim.toFixed(2)}) to memory #${candidateId}. Consider whether update_memory(memory_id=${candidateId}) would be a better fit than keeping both.`,
+    },
+  };
+}
+
 /**
  * Cache topic index to disk for hook-based smart recall.
  * Written when get_project_context succeeds.
@@ -244,7 +279,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (ttl) body.ttl = ttl;
         const result = await storage.saveMemory(body);
         resetDebt();
-        return wrapResult(result);
+        return wrapResult(annotateMergeSuggestion(result));
       } catch (error) {
         return wrapError(error);
       }
@@ -304,7 +339,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (tags && tags.length > 0) body.tags = tags;
         const result = await storage.saveMemory(body);
         resetDebt();
-        return wrapResult(result);
+        return wrapResult(annotateMergeSuggestion(result));
       } catch (error) {
         return wrapError(error);
       }
@@ -1180,7 +1215,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           tags: [`priority-${priority}`, `status-${status}`],
         });
         resetDebt();
-        return wrapResult(result);
+        return wrapResult(annotateMergeSuggestion(result));
       } catch (error) {
         return wrapError(error);
       }
@@ -1393,7 +1428,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           tags: ['correction'],
         });
         resetDebt();
-        return wrapResult(result);
+        return wrapResult(annotateMergeSuggestion(result));
       } catch (error) {
         return wrapError(error);
       }

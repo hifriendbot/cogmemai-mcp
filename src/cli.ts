@@ -1830,6 +1830,93 @@ async function flushEventsLog(sessionId: string, projectId: string, apiKey: stri
   }
 }
 
+// ── PostToolUse:Edit smart-nag hook (v3.19.0) ─────────────
+// Replaces the static `echo` hook that nags on every Write|Edit. Applies
+// heuristics so the agent only gets the "consider saving a memory" prompt
+// when the edit looks substantive — not on version bumps, lockfile churn,
+// build outputs, or hidden state .json files.
+//
+// Output: JSON nag on stdout when substantive, silent otherwise.
+
+const SMART_NAG_OUTPUT = JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'PostToolUse',
+    additionalContext:
+      'File was written/edited. If this change embodies a durable user preference, architecture decision, gotcha, bugfix, or cross-session pattern, call mcp__cogmemai__save_memory NOW (before ending the turn). Ephemeral task-progress edits do not need saving — but durable learnings MUST be saved proactively, not deferred.',
+  },
+});
+
+function isVersionOnlyEdit(toolInput: Record<string, unknown> | undefined): boolean {
+  if (!toolInput) return false;
+  const oldStr = typeof toolInput.old_string === 'string' ? toolInput.old_string : '';
+  const newStr = typeof toolInput.new_string === 'string' ? toolInput.new_string : '';
+  if (!oldStr || !newStr) return false;
+  // SemVer-only replace_all (e.g. bumping every "3.17.0" → "3.18.0")
+  if (toolInput.replace_all && /^\d+\.\d+\.\d+(-[\w.]+)?$/.test(oldStr.trim()) && /^\d+\.\d+\.\d+(-[\w.]+)?$/.test(newStr.trim())) {
+    return true;
+  }
+  // Single "version": "..." line replace
+  const versionLine = /^\s*"version"\s*:\s*"\d+\.\d+\.\d+(-[\w.]+)?"\s*,?\s*$/;
+  if (versionLine.test(oldStr.trim()) && versionLine.test(newStr.trim()) && oldStr.length < 80 && newStr.length < 80) {
+    return true;
+  }
+  return false;
+}
+
+function isTrivialEdit(filePath: string, toolInput: Record<string, unknown> | undefined): boolean {
+  if (!filePath) return true;
+  const norm = filePath.replace(/\\/g, '/').toLowerCase();
+  const basename = norm.split('/').pop() || '';
+
+  // Lockfiles — dependency churn, never a durable learning.
+  if (/^(package-lock\.json|yarn\.lock|bun\.lockb?|pnpm-lock\.yaml|composer\.lock|cargo\.lock|gemfile\.lock|poetry\.lock|uv\.lock)$/i.test(basename)) {
+    return true;
+  }
+
+  // Generated / build / vendor directories.
+  if (/(^|\/)(node_modules|build|dist|\.next|\.nuxt|coverage|target|out|\.cache|\.turbo|\.parcel-cache|__pycache__|\.pytest_cache|venv|\.venv)\//.test(norm)) {
+    return true;
+  }
+
+  // Logs, source maps, minified bundles.
+  if (/\.(log|map|min\.js|min\.css|tsbuildinfo)$/i.test(basename)) {
+    return true;
+  }
+
+  // Hidden state .json files at workspace root (e.g. .dev-page.json, .wp-resp.json).
+  if (/^\.[^/]+\.(json|jsonl|yaml|yml)$/i.test(basename)) {
+    return true;
+  }
+
+  // Version bumps in package.json / server.json / Cargo.toml.
+  if (/^(package\.json|server\.json|cargo\.toml|pyproject\.toml)$/i.test(basename)) {
+    if (isVersionOnlyEdit(toolInput)) return true;
+  }
+
+  return false;
+}
+
+export async function runHookPostToolUseEdit(): Promise<void> {
+  let stdinData = '';
+  try { stdinData = readFileSync(0, 'utf-8'); } catch { return; }
+  if (!stdinData) return;
+
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(stdinData); } catch { return; }
+
+  // Defensive: only nag for actual write tools, even though the matcher
+  // should already constrain this to Write|Edit.
+  const toolName = String(parsed.tool_name || '');
+  if (!/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(toolName)) return;
+
+  const toolInput = (parsed.tool_input || {}) as Record<string, unknown>;
+  const filePath = typeof toolInput.file_path === 'string' ? toolInput.file_path : '';
+
+  if (isTrivialEdit(filePath, toolInput)) return; // silent — no nag
+
+  process.stdout.write(SMART_NAG_OUTPUT);
+}
+
 export async function runHookStop(): Promise<void> {
   const debugLog = (reason: string, extra: Record<string, unknown> = {}) => {
     try {
@@ -2186,6 +2273,23 @@ export function configureHooks(): { success: boolean; error?: string } {
             type: 'command',
             command: 'cogmemai-mcp hook posttooluse',
             timeout: 3,
+          },
+        ],
+      });
+    }
+
+    // v3.19.0 — Smart-nag PostToolUse:Edit hook. Replaces a static `echo` that
+    // fired on every Write/Edit and asked the agent to consider saving a
+    // memory. Now applies heuristics: skip lockfiles, build outputs, version
+    // bumps, hidden state .json files. Only nags on substantive edits.
+    if (!hasCogmemaiHook(settings.hooks.PostToolUse, 'cogmemai-mcp hook posttooluse-edit')) {
+      settings.hooks.PostToolUse.push({
+        matcher: 'Write|Edit|MultiEdit|NotebookEdit',
+        hooks: [
+          {
+            type: 'command',
+            command: 'cogmemai-mcp hook posttooluse-edit',
+            timeout: 5,
           },
         ],
       });
