@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hifriendbot/cogmemai",
-  "description": "Persistent cloud memory for Ai coding assistants. 29 MCP tools. Encrypted at rest.",
+  "description": "95.10% LongMemEval (highest published). Encrypted persistent memory for Ai coding assistants.",
   "repository": {
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
   },
-  "version": "3.10.0",
+  "version": "3.18.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.10.0",
+      "version": "3.18.0",
       "transport": {
         "type": "stdio"
       },
@@ -28,7 +28,7 @@
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.10.0",
+      "version": "3.18.0",
       "transport": {
         "type": "streamable-http",
         "url": "https://hifriendbot.com/mcp/"

@@ -221,10 +221,15 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .describe(
           'Set an expiration time. Use for temporary context like current task status. Format: "24h", "7d", "30d". Memory auto-archives after expiry.'
         ),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
     },
-    async ({ content, memory_type, category, subject, importance, scope, team_id, tags, ttl }) => {
+    async ({ content, memory_type, category, subject, importance, scope, team_id, tags, ttl, project_id }) => {
       try {
-        const projectId = detectProjectId();
+        const projectId = project_id || detectProjectId();
         const body: Record<string, unknown> = {
           content,
           memory_type,
@@ -278,10 +283,15 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .max(5)
         .optional()
         .describe('Optional tags for grouping rules'),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
     },
-    async ({ content, subject, scope, category, tags }) => {
+    async ({ content, subject, scope, category, tags, project_id }) => {
       try {
-        const projectId = detectProjectId();
+        const projectId = project_id || detectProjectId();
         const body: Record<string, unknown> = {
           content,
           memory_type: 'rule',
@@ -1145,10 +1155,15 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .enum(['pending', 'in_progress', 'done', 'blocked'])
         .default('pending')
         .describe('Initial task status'),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
     },
-    async ({ title, description, priority, status }) => {
+    async ({ title, description, priority, status, project_id }) => {
       try {
-        const projectId = detectProjectId();
+        const projectId = project_id || detectProjectId();
         const importance = priority === 'high' ? 9 : priority === 'medium' ? 7 : 5;
         const content = description
           ? `[${status.toUpperCase()}] ${title} — ${description}`
@@ -1354,10 +1369,15 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .enum(['global', 'project'])
         .default('project')
         .describe('global = applies everywhere, project = specific to this codebase'),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
     },
-    async ({ wrong_approach, right_approach, context, scope }) => {
+    async ({ wrong_approach, right_approach, context, scope, project_id }) => {
       try {
-        const projectId = detectProjectId();
+        const projectId = project_id || detectProjectId();
         const content = context
           ? `WRONG: ${wrong_approach} → RIGHT: ${right_approach} (context: ${context})`
           : `WRONG: ${wrong_approach} → RIGHT: ${right_approach}`;
