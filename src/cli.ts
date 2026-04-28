@@ -1860,6 +1860,21 @@ function isVersionOnlyEdit(toolInput: Record<string, unknown> | undefined): bool
   if (versionLine.test(oldStr.trim()) && versionLine.test(newStr.trim()) && oldStr.length < 80 && newStr.length < 80) {
     return true;
   }
+  // WordPress / PHPDoc / JSDoc plugin or theme header version line:
+  //   " * Version: 1.5.6"               (bare)
+  //   " * Version: 1.5.6 // optional descriptive comment about the bump"  (Scott's CMA convention)
+  // Both old and new must be exactly the version line — multi-line Edits won't match.
+  const phpDocVersionLine = /^\*\s*Version:\s*\d+\.\d+\.\d+(-[\w.]+)?(\s*\/\/.*)?$/;
+  if (phpDocVersionLine.test(oldStr.trim()) && phpDocVersionLine.test(newStr.trim()) && oldStr.length < 1000 && newStr.length < 1000) {
+    return true;
+  }
+  // TypeScript / JavaScript package-version constant: "export const VERSION = '3.19.1';"
+  // The uppercase VERSION name is a strong convention for package version (vs. e.g. SCHEMA_VERSION
+  // or PROTOCOL_VERSION which are load-bearing). Matching only the exact "VERSION" identifier.
+  const tsJsVersionLine = /^(export\s+)?const\s+VERSION\s*=\s*['"]\d+\.\d+\.\d+(-[\w.]+)?['"]\s*;?\s*$/;
+  if (tsJsVersionLine.test(oldStr.trim()) && tsJsVersionLine.test(newStr.trim()) && oldStr.length < 100 && newStr.length < 100) {
+    return true;
+  }
   return false;
 }
 
@@ -1888,8 +1903,14 @@ function isTrivialEdit(filePath: string, toolInput: Record<string, unknown> | un
     return true;
   }
 
-  // Version bumps in package.json / server.json / Cargo.toml.
-  if (/^(package\.json|server\.json|cargo\.toml|pyproject\.toml)$/i.test(basename)) {
+  // Version bumps in known metadata files (package.json / server.json / Cargo.toml / pyproject.toml),
+  // WordPress plugin entry .php files (which carry a `* Version: X.Y.Z` header),
+  // or TS/JS source files holding a `VERSION` constant (e.g. cogmemai-mcp's src/config.ts).
+  // The strict regex inside isVersionOnlyEdit is the real guard — extension is a sanity belt.
+  if (
+    /^(package\.json|server\.json|cargo\.toml|pyproject\.toml)$/i.test(basename) ||
+    /\.(php|ts|tsx|js|mjs|cjs)$/i.test(basename)
+  ) {
     if (isVersionOnlyEdit(toolInput)) return true;
   }
 
