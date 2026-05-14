@@ -42,6 +42,13 @@ async function fetchWithRetry(url: string, options: RequestInit, timeoutMs?: num
         return res;
       }
 
+      // Retryable status, but if the body looks like an HTML error page
+      // (firewall/CDN/web-server intercept), the block is deterministic, not
+      // transient. Retrying won't help — surface the response immediately.
+      if (await responseLooksLikeHtml(res)) {
+        return res;
+      }
+
       // Retryable server error — retry if attempts remain
       if (attempt < RETRY_CONFIG.maxRetries) {
         await new Promise((r) => setTimeout(r, retryDelay(attempt)));
@@ -66,6 +73,66 @@ async function fetchWithRetry(url: string, options: RequestInit, timeoutMs?: num
   }
 
   throw lastError || new Error('Request failed after retries');
+}
+
+/**
+ * Peek at a response body without consuming it. Used to spot HTML
+ * error pages (firewall/CDN/server intercepts) before retrying or
+ * attempting JSON.parse.
+ */
+async function responseLooksLikeHtml(res: Response): Promise<boolean> {
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('text/html')) return true;
+  try {
+    const peek = (await res.clone().text()).trimStart().slice(0, 32).toLowerCase();
+    return peek.startsWith('<!doctype') || peek.startsWith('<html');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read a response body as JSON, but if it's HTML (a firewall block, CDN
+ * error page, or upstream-proxy intercept), throw a structured error that
+ * names the blocking layer when possible. Replaces a bare `await res.json()`
+ * which would otherwise throw an opaque "Unexpected token '<'..." parse error.
+ *
+ * Background: we lost ~5 weeks of CogmemAi memory in early 2026 because
+ * NinjaFirewall returned HTML 403s that the client tried to JSON.parse,
+ * threw a confusing parse error, and silently retried forever. This helper
+ * is the cure — see SCOPE-v3.20.0.md for the full incident write-up.
+ */
+async function safeParseJson(res: Response, url: string): Promise<unknown> {
+  const text = await res.text();
+  const looksHtml =
+    (res.headers.get('content-type') || '').includes('text/html') ||
+    text.trimStart().slice(0, 32).toLowerCase().startsWith('<!doctype') ||
+    text.trimStart().slice(0, 32).toLowerCase().startsWith('<html');
+
+  if (looksHtml) {
+    let blocker = 'an upstream proxy, CDN, or firewall';
+    if (text.includes('NinjaFirewall')) blocker = 'NinjaFirewall (WAF)';
+    else if (text.includes('Cloudflare')) blocker = 'Cloudflare';
+    else if (text.includes('ModSecurity') || text.includes('Mod_Security')) blocker = 'ModSecurity';
+    else if (text.includes('cPanel') || text.includes('LiteSpeed')) blocker = 'the web server';
+
+    throw new Error(
+      `CogmemAi backend returned HTML (HTTP ${res.status}) instead of JSON. ` +
+      `Blocked by ${blocker}. URL: ${url}. ` +
+      `If this persists, the request payload may contain content the WAF flags as XSS or code injection. ` +
+      `For hifriendbot.com: verify /home/ganjacom/hifriendbot.com/.htninja exists and is not renamed to .bak. ` +
+      `Otherwise report the URL + this message to support@hifriendbot.com or open an issue at github.com/hifriendbot/cogmemai-mcp.`
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `CogmemAi backend returned non-JSON response (HTTP ${res.status}) from ${url}. ` +
+      `First 200 chars: ${text.slice(0, 200)}`
+    );
+  }
 }
 
 /**
@@ -109,7 +176,7 @@ export async function api(
       const separator = url.includes('?') ? '&' : '?';
       const fullUrl = `${url}${separator}${qs}`;
       const res = await fetchWithRetry(fullUrl, { method, headers }, timeoutMs);
-      const data = await res.json();
+      const data = await safeParseJson(res, fullUrl);
       if (!res.ok) {
         if (res.status === 402) {
           throw new Error(format402Error(data));
@@ -123,7 +190,7 @@ export async function api(
   }
 
   const res = await fetchWithRetry(url, options, timeoutMs);
-  const data = await res.json();
+  const data = await safeParseJson(res, url);
 
   if (!res.ok) {
     // Surface x402 payment instructions clearly for 402 responses

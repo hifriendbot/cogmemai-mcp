@@ -18,6 +18,10 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### Loud Failures on Firewall Blocks (v3.20.0)
+
+When a request to the CogmemAi backend is intercepted by an upstream firewall, CDN, or proxy, the response is HTML, not JSON. Earlier versions tried to JSON-parse it and threw a confusing `Unexpected token '<'` error, then silently retried the same blocked payload. v3.20.0 detects HTML responses, names the blocking layer when it can (NinjaFirewall, Cloudflare, ModSecurity), and surfaces a clear actionable error. Retryable 4xx responses with HTML bodies no longer trigger retry loops. The class of incident that can silently drop memory writes is now loud.
+
 ### Autonomous Memory — Your Ai Doesn't Decide Whether to Save Anymore (v3.15)
 
 Every memory system has the same hidden failure mode: **the Ai has to choose to save, and under pressure it doesn't.** You can bake instructions into system prompts. You can nudge. But when your Ai is head-down on a coding task, it forgets to save — and the decisions you made two hours ago vanish when the context compacts.
