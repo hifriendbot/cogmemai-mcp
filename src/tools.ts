@@ -5,12 +5,12 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import type { StorageBackend } from './storage.js';
 import { detectProjectId } from './project.js';
-import { FLAG_DIR, VERSION } from './config.js';
+import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
 
 const MEMORY_TYPES = [
@@ -41,6 +41,31 @@ let toolCallCount = 0;
 const MAX_REMINDER_CALLS = 3; // Stop nagging after this many tool calls
 
 const CONTEXT_REMINDER = '\n\n[!] REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
+
+// The SessionStart hook (`cogmemai-mcp hook sessionstart`) injects project
+// context at session open and drops a `session-<id>` marker in FLAG_DIR. That
+// marker means context IS already loaded, even though this long-running stdio
+// server process never saw a get_project_context tool call (the hook runs in a
+// separate short-lived process). Without this check the reminder fires
+// spuriously for the first few tool calls of every hook-enabled session.
+// Returns true if a fresh session marker exists. Skipped in remote mode, where
+// there are no local hooks or markers.
+function sessionContextInjectedByHook(): boolean {
+  if (remoteMode) return false;
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    for (const file of readdirSync(FLAG_DIR)) {
+      if (!file.startsWith('session-')) continue;
+      try {
+        const data = JSON.parse(readFileSync(join(FLAG_DIR, file), 'utf-8'));
+        if (typeof data.timestamp === 'number' && now - data.timestamp < SESSION_EXPIRY_SECONDS) {
+          return true;
+        }
+      } catch { /* unreadable/corrupt marker — ignore */ }
+    }
+  } catch { /* FLAG_DIR missing — no hook has run */ }
+  return false;
+}
 
 // ─── Memory Debt Tracker ──────────────────────────────────────
 // Counts non-save cogmemai tool calls since the last save. When the count
@@ -101,7 +126,11 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
   const nudge = debtNudge();
   if (nudge) text = nudge + '\n\n' + text;
   if (!contextLoaded && !skipReminder && toolCallCount <= MAX_REMINDER_CALLS) {
-    text += CONTEXT_REMINDER;
+    if (sessionContextInjectedByHook()) {
+      contextLoaded = true; // hook already injected context — stop checking
+    } else {
+      text += CONTEXT_REMINDER;
+    }
   }
   return { content: [{ type: 'text' as const, text }] };
 }
