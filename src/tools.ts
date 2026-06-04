@@ -40,7 +40,7 @@ let contextLoaded = false;
 let toolCallCount = 0;
 const MAX_REMINDER_CALLS = 3; // Stop nagging after this many tool calls
 
-const CONTEXT_REMINDER = '\n\n[!] REMINDER: You have not called get_project_context yet this session. Call it now to load your memories from previous sessions.';
+const CONTEXT_REMINDER = '\n\n(Note to assistant: call get_project_context to load memories from previous sessions, if you have not already.)';
 
 // The SessionStart hook (`cogmemai-mcp hook sessionstart`) injects project
 // context at session open and drops a `session-<id>` marker in FLAG_DIR. That
@@ -73,8 +73,8 @@ function sessionContextInjectedByHook(): boolean {
 // the model cannot ignore it. This is the safety net for "Claude read all
 // session, saved nothing" failures observed in production.
 
-const DEBT_WARN_THRESHOLD = 8;
-const DEBT_URGENT_THRESHOLD = 15;
+const DEBT_WARN_THRESHOLD = 12;
+const DEBT_URGENT_THRESHOLD = 25;
 const DEBT_FILE = join(FLAG_DIR, 'debt.json');
 
 let debtCount = 0;
@@ -109,11 +109,15 @@ export function resetDebt(): void {
 }
 
 function debtNudge(): string {
+  // Gentle, assistant-directed note only — never alarmist. The end user can see tool
+  // output in the transcript and must never be made to feel the product is failing.
+  // The autonomous Stop-hook capture is the real safety net; this is just a soft prompt
+  // for higher-quality manual saves.
   if (debtCount >= DEBT_URGENT_THRESHOLD) {
-    return `\n\n⚠️ MEMORY DEBT CRITICAL: ${debtCount} cogmemai operations since last save_memory. You are losing context that will not be recoverable if this session ends. STOP the current task. Call save_memory NOW with a summary of recent work — file paths edited, decisions made, bugs found, what you learned. Reset the counter before your next user-facing response. Sessions have been lost in production because this nudge was ignored.`;
+    return `\n\n(Note to assistant: ${debtCount} operations since the last save_memory — a good moment to save a brief summary of recent work so it persists across sessions.)`;
   }
   if (debtCount >= DEBT_WARN_THRESHOLD) {
-    return `\n\n⚠️ MEMORY DEBT: ${debtCount} cogmemai tool calls since last save. Call save_memory before your next user-facing response with a summary of what you've learned or changed this session. Do not rely on Stop hooks — they are best-effort and can fail silently.`;
+    return `\n\n(Note to assistant: consider save_memory to capture recent changes.)`;
   }
   return '';
 }
@@ -426,13 +430,13 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
     }
   );
 
-  // ─── 1e. preflight — Think Before You Speak ──────────────
+  // ─── 1e. preflight (proactive recall) ──────────────
   // Lightweight, fast recall designed to be called BEFORE the AI responds.
   // Uses keyword-only search (no embedding generation) for sub-200ms latency.
 
   server.tool(
     'preflight',
-    'Think Before You Speak. Call this BEFORE making any suggestion, recommendation, or action plan. Sends the topic to a fast keyword search and returns any relevant prior context — previous attempts, decisions, contacts, evaluations. This prevents suggesting things that were already tried, rejected, or completed. Fast and cheap — use liberally.',
+    'Proactive recall. Call this BEFORE making any suggestion, recommendation, or action plan. Sends the topic to a fast keyword search and returns any relevant prior context: previous attempts, decisions, contacts, evaluations. This prevents suggesting things that were already tried, rejected, or completed. Fast and cheap, use liberally.',
     {
       message: z
         .string()

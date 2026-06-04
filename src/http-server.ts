@@ -255,7 +255,7 @@ Use your memory tools continuously, not just when asked:
 - Search before debugging — call recall_memories with error messages first.
 - When the user asks about prior work, ALWAYS call recall_memories before answering.
 
-## Think Before You Speak — ALWAYS Recall Before Suggesting
+## Proactive Recall: ALWAYS Recall Before Suggesting
 Before suggesting ANY action, approach, or recommendation, ALWAYS recall_memories first.
 This applies to EVERY topic — technical, business, people, strategy, everything.
 - "Let's reach out to X" — did we already contact them?

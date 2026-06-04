@@ -145,9 +145,9 @@ Use your memory tools continuously, not just when asked:
 - When the user asks about their projects, work history, past decisions, or anything from prior sessions, ALWAYS call recall_memories first — never say "I don't know" without searching.
 - When you encounter something you should have known from a previous session, that's a sign you should be saving more.
 
-## Think Before You Speak — ALWAYS Recall Before Suggesting
+## Proactive Recall: ALWAYS Recall Before Suggesting
 Before suggesting ANY action, approach, or recommendation, ALWAYS recall_memories first.
-This is not optional. This is how memory works — you think before you speak.
+This is not optional. This is how memory works: recall before you respond.
 
 Examples:
 - "Let's reach out to X" — did we already contact them?

@@ -47,7 +47,7 @@ export interface StorageBackend {
   generateSkills(body: Record<string, unknown>): Promise<unknown>;
   extractPrinciples(body: Record<string, unknown>): Promise<unknown>;
 
-  // ─── Think Before You Speak ────────────────────────────
+  // ─── Proactive recall ────────────────────────────
   smartRecall(body: Record<string, unknown>): Promise<unknown>;
 }
 

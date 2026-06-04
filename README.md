@@ -30,7 +30,7 @@ CogmemAi v3.15 moves the decision out of the Ai's hands entirely. Your coding se
 
 The result: a day of heavy coding produces 15–20 quality memories instead of 3. Future sessions pick up seamlessly. Your Ai stops re-litigating architectural choices you already made. **Stop reminding your Ai to remember. It just does.**
 
-### Think Before You Speak — Proactive Memory Recall (v3.12)
+### Proactive Memory Recall (v3.12)
 
 CogmemAi now **thinks before it speaks**. Before your Ai assistant suggests any action, approach, or recommendation, CogmemAi checks its memory first — automatically, on every topic.
 
@@ -316,7 +316,7 @@ CogmemAi provides 35 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
-| `preflight` | **Think Before You Speak.** Fast recall to check prior context before making any suggestion |
+| `preflight` | **Proactive recall.** Fast recall to check prior context before making any suggestion |
 | `save_memory` | Store a fact explicitly (architecture decision, preference, etc.) |
 | `recall_memories` | Search memories using natural language (semantic search) |
 | `extract_memories` | Ai extracts facts from a conversation exchange automatically |

@@ -129,7 +129,7 @@ export class CloudStorage implements StorageBackend {
     return api('/cogmemai/extract-principles', 'POST', body, 30000, this.apiKey);
   }
 
-  // ─── Think Before You Speak ────────────────────────────
+  // ─── Proactive recall ────────────────────────────
 
   async smartRecall(body: Record<string, unknown>): Promise<unknown> {
     return api('/cogmemai/smart-recall', 'POST', body, undefined, this.apiKey);
