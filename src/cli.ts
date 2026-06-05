@@ -1815,10 +1815,15 @@ async function flushEventsLog(sessionId: string, projectId: string, apiKey: stri
     return;
   }
 
+  // WAF-safe: send the batch base64-encoded (CMB64:) so a large/dense session
+  // log of tool inputs + prose does not trip the host WAF (ModSecurity cumulative
+  // anomaly scoring) and 404. The WP handler decodes events_b64 back to the array;
+  // it still accepts a raw `events` array from older clients.
+  const eventsB64 = 'CMB64:' + Buffer.from(JSON.stringify(events), 'utf8').toString('base64');
   const ok = await hookPostJson(
     `${API_BASE}/cogmemai/extract-events`,
     apiKey,
-    { events, project_id: projectId, session_id: sessionId },
+    { events_b64: eventsB64, project_id: projectId, session_id: sessionId },
     'stop-extract-events'
   );
 
