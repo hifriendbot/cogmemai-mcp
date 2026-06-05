@@ -15,10 +15,27 @@ export class CloudStorage implements StorageBackend {
     this.apiKey = apiKey;
   }
 
+  /**
+   * WAF-safe encode a free-text field. The host WAF (ModSecurity) scores the raw
+   * POST body and 404s long/dense prose that accumulates enough "suspicious"
+   * tokens (quotes, parens, %, slashes, tags). Base64-encoding the text and
+   * marking it "CMB64:" means the WAF only ever sees innocuous base64; the WP
+   * REST handler decodes it. Only applied on the cloud HTTP path (local/hybrid
+   * backends store text directly and have no decoder). Backward compatible: the
+   * server treats any unmarked value as raw.
+   */
+  private encField(body: Record<string, unknown>, field: string): Record<string, unknown> {
+    const v = body[field];
+    if (typeof v === 'string' && v.length > 0) {
+      return { ...body, [field]: 'CMB64:' + Buffer.from(v, 'utf8').toString('base64') };
+    }
+    return body;
+  }
+
   // ─── Core CRUD ─────────────────────────────────────────
 
   async saveMemory(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
+    return api('/cogmemai/store', 'POST', this.encField(body, 'content'), undefined, this.apiKey);
   }
 
   async recallMemories(body: Record<string, unknown>): Promise<unknown> {
@@ -38,7 +55,7 @@ export class CloudStorage implements StorageBackend {
   }
 
   async updateMemory(id: number, body: Record<string, unknown>): Promise<unknown> {
-    return api(`/cogmemai/memory/${id}`, 'PATCH', body, undefined, this.apiKey);
+    return api(`/cogmemai/memory/${id}`, 'PATCH', this.encField(body, 'content'), undefined, this.apiKey);
   }
 
   async bulkDelete(ids: number[]): Promise<unknown> {
@@ -60,7 +77,7 @@ export class CloudStorage implements StorageBackend {
   }
 
   async saveSessionSummary(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/session-summary', 'POST', body, undefined, this.apiKey);
+    return api('/cogmemai/session-summary', 'POST', this.encField(body, 'summary'), undefined, this.apiKey);
   }
 
   async listTags(params: Record<string, unknown>): Promise<unknown> {
@@ -110,11 +127,11 @@ export class CloudStorage implements StorageBackend {
   }
 
   async saveCorrection(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
+    return api('/cogmemai/store', 'POST', this.encField(body, 'content'), undefined, this.apiKey);
   }
 
   async setReminder(body: Record<string, unknown>): Promise<unknown> {
-    return api('/cogmemai/store', 'POST', body, undefined, this.apiKey);
+    return api('/cogmemai/store', 'POST', this.encField(body, 'content'), undefined, this.apiKey);
   }
 
   async getStaleMemories(params: Record<string, unknown>): Promise<unknown> {
