@@ -49,6 +49,10 @@ export interface StorageBackend {
 
   // ─── Proactive recall ────────────────────────────
   smartRecall(body: Record<string, unknown>): Promise<unknown>;
+
+  // ─── Recycle bin (cloud-backed; optional so local mode can omit) ───
+  restoreMemory?(id: number): Promise<unknown>;
+  listTrash?(params: Record<string, unknown>): Promise<unknown>;
 }
 
 /**

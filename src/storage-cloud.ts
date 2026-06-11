@@ -62,6 +62,14 @@ export class CloudStorage implements StorageBackend {
     return api('/cogmemai/bulk-delete', 'POST', { ids }, undefined, this.apiKey);
   }
 
+  async restoreMemory(id: number): Promise<unknown> {
+    return api(`/cogmemai/memory/${id}/restore`, 'POST', {}, undefined, this.apiKey);
+  }
+
+  async listTrash(params: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/trash', 'GET', params, undefined, this.apiKey);
+  }
+
   async bulkUpdate(updates: unknown[]): Promise<unknown> {
     return api('/cogmemai/bulk-update', 'POST', { updates }, undefined, this.apiKey);
   }

@@ -132,6 +132,17 @@ export class HybridStorage implements StorageBackend {
     return results;
   }
 
+  // Recycle bin is cloud-backed: the local SQLite mirror hard-deletes, but the
+  // cloud trash is the source of truth for restore. A restored memory re-syncs
+  // to local on the next recall/list.
+  async restoreMemory(id: number): Promise<unknown> {
+    return this.cloud.restoreMemory(id);
+  }
+
+  async listTrash(params: Record<string, unknown>): Promise<unknown> {
+    return this.cloud.listTrash(params);
+  }
+
   // ─── Content & Metadata ────────────────────────────────
 
   async exportMemories(params: Record<string, unknown>): Promise<unknown> {

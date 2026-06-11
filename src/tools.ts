@@ -763,13 +763,56 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
 
   server.tool(
     'delete_memory',
-    'Delete a specific memory by its ID. This is permanent.',
+    'Move a memory to the trash by its ID. Trashed memories are hidden from recall and restorable with restore_memory for 30 days, then purged permanently.',
     {
       memory_id: z.coerce.number().int().describe('Memory ID to delete'),
     },
     async ({ memory_id }) => {
       try {
         const result = await storage.deleteMemory(memory_id);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 6b. restore_memory ──────────────────────────────────
+
+  server.tool(
+    'restore_memory',
+    'Restore a trashed (deleted) memory by its ID. Works within 30 days of deletion, before the trash is purged. Use list_trash to find restorable memories.',
+    {
+      memory_id: z.coerce.number().int().describe('Memory ID to restore from the trash'),
+    },
+    async ({ memory_id }) => {
+      try {
+        if (!storage.restoreMemory) {
+          return wrapError(new Error(`restore_memory is not available in ${storage.mode} storage mode.`));
+        }
+        const result = await storage.restoreMemory(memory_id);
+        return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 6c. list_trash ──────────────────────────────────────
+
+  server.tool(
+    'list_trash',
+    'List trashed (deleted) memories, newest first, with days remaining before each is purged permanently. Restore any of them with restore_memory.',
+    {
+      limit: z.coerce.number().int().min(1).max(100).default(50).describe('Results per page'),
+      offset: z.coerce.number().int().min(0).default(0).describe('Pagination offset'),
+    },
+    async ({ limit, offset }) => {
+      try {
+        if (!storage.listTrash) {
+          return wrapError(new Error(`list_trash is not available in ${storage.mode} storage mode.`));
+        }
+        const result = await storage.listTrash({ limit, offset });
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
