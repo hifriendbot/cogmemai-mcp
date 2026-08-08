@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 360">
+  <!-- Terminal background -->
+  <rect width="820" height="360" rx="10" ry="10" fill="#1a1b26"/>
+
+  <!-- Title bar -->
+  <rect width="820" height="36" rx="10" ry="10" fill="#1e2030"/>
+  <rect x="0" y="26" width="820" height="10" fill="#1e2030"/>
+
+  <!-- Separator -->
+  <line x1="0" y1="36" x2="820" y2="36" stroke="#2f3549" stroke-width="0.5"/>
+
+  <!-- Traffic lights -->
+  <circle cx="22" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="42" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="62" cy="18" r="6" fill="#28c840"/>
+
+  <!-- Title bar text -->
+  <text x="410" y="23" text-anchor="middle" fill="#565f89" font-family="SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace" font-size="12">Terminal</text>
+
+  <!-- Content -->
+  <g font-family="SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace" font-size="14">
+
+    <!-- $ claude -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.014;0.036;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="68">
+        <tspan fill="#7aa2f7">$ </tspan><tspan fill="#c0caf5">claude</tspan>
+      </text>
+    </g>
+
+    <!-- ✦ CogmemAi — 52 memories loaded -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.107;0.129;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="106">
+        <tspan fill="#bb9af7" font-weight="bold">&#x2726; CogmemAi</tspan><tspan fill="#565f89"> &#x2014; </tspan><tspan fill="#c0caf5">52 memories loaded</tspan>
+      </text>
+    </g>
+
+    <!-- Health: 95/100 · Recalls: 1,247 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.150;0.171;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="44" y="128">
+        <tspan fill="#565f89">Health: </tspan><tspan fill="#9ece6a">95/100</tspan><tspan fill="#414868"> &#x00B7; </tspan><tspan fill="#565f89">Recalls: </tspan><tspan fill="#c0caf5">1,247</tspan>
+      </text>
+    </g>
+
+    <!-- Last session: Added rate limiting to API endpoints -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.186;0.207;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="44" y="150">
+        <tspan fill="#565f89">Last session: </tspan><tspan fill="#c0caf5">Added rate limiting to API endpoints</tspan>
+      </text>
+    </g>
+
+    <!-- Reminder: Deploy migration #47 before testing -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.221;0.243;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="44" y="172">
+        <tspan fill="#e0af68">Reminder: </tspan><tspan fill="#c0caf5">Deploy migration #47 before testing</tspan>
+      </text>
+    </g>
+
+    <!-- > What database are we using and why? -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.321;0.343;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="210">
+        <tspan fill="#7aa2f7">&gt; </tspan><tspan fill="#c0caf5">What database are we using and why?</tspan>
+      </text>
+    </g>
+
+    <!-- Response line 1 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.443;0.464;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="248" fill="#c0caf5">You&#x2019;re using <tspan fill="#9ece6a">PostgreSQL 15</tspan> with <tspan fill="#9ece6a">Prisma ORM</tspan>.</text>
+    </g>
+
+    <!-- Response line 2 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.479;0.500;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="270" fill="#c0caf5">Connection pooling via PgBouncer (max 20 connections).</text>
+    </g>
+
+    <!-- Response line 3 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.514;0.536;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="292" fill="#c0caf5">Migrations are in <tspan fill="#e0af68">prisma/migrations/</tspan>.</text>
+    </g>
+
+    <!-- Response line 4 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.550;0.571;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="314" fill="#c0caf5">You chose Prisma over TypeORM on <tspan fill="#7aa2f7">Dec 3</tspan> because of</text>
+    </g>
+
+    <!-- Response line 5 -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.586;0.607;0.750;0.821;1" dur="14s" repeatCount="indefinite"/>
+      <text x="24" y="336" fill="#c0caf5">better type safety with your Next.js + tRPC stack.</text>
+    </g>
+
+  </g>
+</svg>
