@@ -430,8 +430,18 @@ export class LocalStorage implements StorageBackend {
     const queryParams: unknown[] = [];
 
     if (projectId) {
-      conditions.push('project_id = ?');
-      queryParams.push(projectId);
+      // A project filter must still surface globals (project_id IS NULL).
+      // A bare "project_id = ?" drops every global, which hid them from the
+      // default scope:'all' view. Mirrors the cloud API's behaviour.
+      if (scope === 'project') {
+        conditions.push('project_id = ?');
+        queryParams.push(projectId);
+      } else if (scope !== 'global') {
+        conditions.push("(project_id = ? OR scope = 'global')");
+        queryParams.push(projectId);
+      }
+      // scope === 'global': the scope filter below already restricts to
+      // globals; narrowing by project_id here would match nothing.
     }
     if (memoryType) {
       conditions.push('memory_type = ?');

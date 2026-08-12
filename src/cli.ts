@@ -1301,6 +1301,18 @@ async function trySmartRecall(
   hookInput: { session_id: string; transcript_path: string; cwd: string },
   markerPath: string
 ): Promise<void> {
+  // Smart recall silently returns at ~8 different points. Without a trace there
+  // is no way to tell "it fired and found nothing" from "it never ran", which
+  // makes a missed injection undiagnosable after the fact. Mirrors the stop
+  // hook's debugLog. Never throws.
+  const debugLog = (reason: string, extra: Record<string, unknown> = {}) => {
+    try {
+      mkdirSync(FLAG_DIR, { recursive: true });
+      const entry = JSON.stringify({ ts: new Date().toISOString(), event: 'smart-recall', reason, ...extra }) + '\n';
+      appendFileSync(join(FLAG_DIR, 'hook-debug.log'), entry);
+    } catch { /* never throw from debug */ }
+  };
+
   // Read marker data (has project_id, last_smart_recall, last_smart_topics)
   let markerData: {
     timestamp: number;
@@ -1312,6 +1324,7 @@ async function trySmartRecall(
   try {
     markerData = JSON.parse(readFileSync(markerPath, 'utf-8'));
   } catch {
+    debugLog('early_return_unreadable_marker');
     return; // Can't read marker — skip
   }
 
@@ -1319,19 +1332,25 @@ async function trySmartRecall(
   const now = Math.floor(Date.now() / 1000);
   const lastRecall = markerData.last_smart_recall || 0;
   if (now - lastRecall < SMART_RECALL_COOLDOWN) {
+    debugLog('early_return_cooldown', { since_last: now - lastRecall, cooldown: SMART_RECALL_COOLDOWN });
     return; // Too soon since last smart recall
   }
 
   // Get the user's latest message from transcript
-  if (!hookInput.transcript_path) return;
+  if (!hookInput.transcript_path) {
+    debugLog('early_return_no_transcript_path');
+    return;
+  }
   const userMessage = getLastUserMessage(hookInput.transcript_path);
   if (userMessage.length < SMART_RECALL_MIN_MSG_LENGTH) {
+    debugLog('early_return_message_too_short', { len: userMessage.length, min: SMART_RECALL_MIN_MSG_LENGTH });
     return; // Message too short/trivial
   }
 
   // Extract keywords from user message
   const keywords = extractKeywords(userMessage);
   if (keywords.length < 2) {
+    debugLog('early_return_too_few_keywords', { count: keywords.length });
     return; // Not enough meaningful keywords
   }
 
@@ -1341,6 +1360,11 @@ async function trySmartRecall(
   // Read topic index from cache
   const cachePath = topicCachePath(projectId);
   if (!existsSync(cachePath)) {
+    // NOTE: this is the single most consequential skip. The topic index is only
+    // written when get_project_context succeeds, so a session whose startup
+    // context load failed (e.g. the response exceeded the token limit) has
+    // smart recall disabled for its entire lifetime, with no signal anywhere.
+    debugLog('early_return_no_topic_cache', { project_id: projectId, cache_path: cachePath });
     return; // No topic index cached yet — skip until get_project_context is called
   }
 
@@ -1353,12 +1377,19 @@ async function trySmartRecall(
 
   // Check cache freshness (max 24 hours)
   if (now - topicCache.timestamp > 86400) {
+    debugLog('early_return_stale_cache', { age_hours: Math.round((now - topicCache.timestamp) / 360) / 10 });
     return; // Stale cache
   }
 
   // Match keywords against topic index
   const matches = matchTopics(keywords, topicCache.topics);
   if (matches.length === 0 || matches[0].score < SMART_RECALL_MIN_MATCH_SCORE) {
+    debugLog('early_return_no_topic_match', {
+      keyword_count: keywords.length,
+      topics_indexed: topicCache.topics.length,
+      best_score: matches[0]?.score ?? 0,
+      min_score: SMART_RECALL_MIN_MATCH_SCORE,
+    });
     return; // No meaningful topic match
   }
 
@@ -1366,12 +1397,16 @@ async function trySmartRecall(
   const lastTopics = new Set(markerData.last_smart_topics || []);
   const newTopics = matches.filter(m => !lastTopics.has(m.subject));
   if (newTopics.length === 0) {
+    debugLog('early_return_topics_already_injected', { matched: matches.slice(0, 5).map(m => m.subject) });
     return; // Same topics as last injection — skip
   }
 
   // We have a topic match! Call the smart-recall API
   const apiKey = resolveApiKey();
-  if (!apiKey) return;
+  if (!apiKey) {
+    debugLog('early_return_no_api_key');
+    return;
+  }
 
   let res: Response;
   try {
@@ -1404,7 +1439,16 @@ async function trySmartRecall(
     matched_topics?: string[];
   };
 
-  if (!data.memories || data.memories.length === 0) return;
+  if (!data.memories || data.memories.length === 0) {
+    debugLog('early_return_api_returned_none', { matched_topics: data.matched_topics ?? [] });
+    return;
+  }
+
+  debugLog('injected', {
+    count: data.memories.length,
+    topics: matches.slice(0, 5).map(m => m.subject),
+    ids: data.memories.map(m => m.id).filter(Boolean),
+  });
 
   // Build injection text (with memory IDs for easy reference)
   const lines: string[] = [];

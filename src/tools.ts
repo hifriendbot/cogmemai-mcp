@@ -395,12 +395,17 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         const projectId = detectProjectId();
         const body: Record<string, unknown> = {
           memory_type: 'rule',
-          scope: scope === 'all' ? undefined : scope,
-          project_id: projectId,
-          sort_by: 'created_at',
-          sort_order: 'asc',
+          // 'created_at' is not a valid sort key (the API accepts importance |
+          // updated | created | referenced | least_used), so it silently fell
+          // back to importance. 'sort_order' was never a supported param.
+          sort_by: 'created',
           limit: 100,
         };
+        if (scope !== 'all') body.scope = scope;
+        // Global rules carry project_id = NULL, so sending a project_id next to
+        // scope:'global' matched nothing and returned 0 of 12 real rules.
+        // Same guard list_memories already applies.
+        if (scope !== 'global') body.project_id = projectId;
         const result = await storage.listMemories(body);
         return wrapResult(result);
       } catch (error) {
