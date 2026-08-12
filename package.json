@@ -1,6 +1,6 @@
 {
   "name": "cogmemai-mcp",
-  "version": "3.21.0",
+  "version": "3.21.1",
   "mcpName": "io.github.hifriendbot/cogmemai",
   "description": "CogmemAi: Autonomous Cognitive Memory for Any Ai System. 95.10% on LongMemEval (top published score on the field's hardest long-term memory benchmark) and 91% on LoCoMo (above human performance). Autonomous memory capture: your Ai's work is saved even when it forgets to. Proactive recall: your Ai checks its memory before every suggestion. Enterprise-grade semantic search, self-improving recall, auto-skills, auto-linking knowledge graph, query synthesis, contradiction detection, context-aware ranking, and adaptive retrieval. Quantum-safe encryption. The most complete Ai memory system available. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP client.",
   "type": "module",
