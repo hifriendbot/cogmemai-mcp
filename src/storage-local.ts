@@ -97,9 +97,14 @@ export class LocalStorage implements StorageBackend {
     const ttl = typeof body.ttl === 'string' ? body.ttl : undefined;
     const expiresAt = ttl ? computeExpiresAt(ttl) : null;
 
+    // Provenance: a timestamp only when the caller explicitly said it observed
+    // the thing. NULL (the default) means nobody checked, which must never be
+    // confused with "checked and found true". Mirrors last_verified on cloud.
+    const lastVerified = body.verified === true ? new Date().toISOString() : null;
+
     const stmt = db.prepare(`
-      INSERT INTO memories (content, memory_type, category, subject, importance, scope, project_id, tags, ttl, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (content, memory_type, category, subject, importance, scope, project_id, tags, ttl, expires_at, last_verified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -113,6 +118,7 @@ export class LocalStorage implements StorageBackend {
       JSON.stringify(tags),
       ttl || null,
       expiresAt,
+      lastVerified,
     );
 
     // Sync to FTS5 index for better search
@@ -198,11 +204,12 @@ export class LocalStorage implements StorageBackend {
         id: number; content: string; memory_type: string; category: string;
         subject: string; importance: number; scope: string; project_id: string | null;
         tags: string; reference_count: number; created_at: string; updated_at: string;
+        last_verified: string | null;
       }
 
       const rows = db.prepare(`
         SELECT id, content, memory_type, category, subject, importance, scope,
-               project_id, tags, reference_count, created_at, updated_at
+               project_id, tags, reference_count, created_at, updated_at, last_verified, last_verified
         FROM memories
         WHERE id IN (${placeholders})${extraWhere}
         ORDER BY importance DESC, updated_at DESC
@@ -223,6 +230,9 @@ export class LocalStorage implements StorageBackend {
         return {
           ...row,
           content: plainContent,
+          // Normalised to the same boolean the cloud path returns, so a caller
+          // never has to care which storage backend answered.
+          verified: !!row.last_verified,
           relevance_score: Math.round((ftsRank + tiebreaker) * 100) / 100,
           tags: safeParseTags(row.tags),
         };
@@ -257,11 +267,12 @@ export class LocalStorage implements StorageBackend {
         id: number; content: string; memory_type: string; category: string;
         subject: string; importance: number; scope: string; project_id: string | null;
         tags: string; reference_count: number; created_at: string; updated_at: string;
+        last_verified: string | null;
       }
 
       const rows = db.prepare(`
         SELECT id, content, memory_type, category, subject, importance, scope,
-               project_id, tags, reference_count, created_at, updated_at
+               project_id, tags, reference_count, created_at, updated_at, last_verified, last_verified
         FROM memories
         ${whereClause}
         ORDER BY importance DESC, updated_at DESC
@@ -287,6 +298,9 @@ export class LocalStorage implements StorageBackend {
         return {
           ...row,
           content: plainContent,
+          // Normalised to the same boolean the cloud path returns, so a caller
+          // never has to care which storage backend answered.
+          verified: !!row.last_verified,
           keywordScore,
           relevance_score: Math.round((keywordScore + tiebreaker) * 100) / 100,
           tags: safeParseTags(row.tags),
@@ -353,7 +367,7 @@ export class LocalStorage implements StorageBackend {
 
     const memories = db.prepare(`
       SELECT id, content, memory_type, category, subject, importance, scope,
-             project_id, tags, reference_count, created_at, updated_at
+             project_id, tags, reference_count, created_at, updated_at, last_verified
       FROM memories
       ${whereClause}
       ORDER BY importance DESC, updated_at DESC
@@ -480,7 +494,7 @@ export class LocalStorage implements StorageBackend {
 
     const memories = db.prepare(`
       SELECT id, content, memory_type, category, subject, importance, scope,
-             project_id, tags, reference_count, created_at, updated_at
+             project_id, tags, reference_count, created_at, updated_at, last_verified
       FROM memories
       ${whereClause}
       ORDER BY ${orderBy}

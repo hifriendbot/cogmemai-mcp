@@ -159,6 +159,29 @@ function initSchema(db: Database.Database): void {
       // FTS5 not available in this SQLite build - skip silently, fall back to keyword search
     }
   }
+
+  // ── Schema v3: provenance (was this observed, or only inferred?) ──
+  //
+  // NULL means nobody ever checked. A timestamp means the claim was confirmed
+  // against something real at that moment. Mirrors last_verified on the cloud
+  // side so an offline save carries the same signal a synced one does.
+  //
+  // Existing rows are deliberately left NULL rather than backfilled to "now":
+  // they were written before anything tracked this, so the honest value is
+  // "unknown", and stamping them verified would launder every past guess into
+  // a checked fact, which is the exact failure this column exists to prevent.
+  if (currentVersion < 3) {
+    try {
+      const cols = db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === 'last_verified')) {
+        db.exec('ALTER TABLE memories ADD COLUMN last_verified TEXT;');
+      }
+      db.prepare('UPDATE schema_version SET version = ?').run(3);
+    } catch {
+      // Column already present, or an older SQLite without ALTER support.
+      // Saving still works; the flag is simply not persisted offline.
+    }
+  }
 }
 
 /**
