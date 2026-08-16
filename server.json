@@ -6,7 +6,7 @@
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
   },
-  "version": "3.19.1",
+  "version": "3.22.0",
   "packages": [
     {
       "registryType": "npm",

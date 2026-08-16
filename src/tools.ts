@@ -294,8 +294,14 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .max(200)
         .optional()
         .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
+      verified: z
+        .boolean()
+        .optional()
+        .describe(
+          'Set true ONLY if you directly observed this: you ran the command, read the file, or saw the query result. Leave it unset when you inferred, assumed, or were told it. Recall reports this back, so a later session can tell a checked fact from a plausible guess. Unverified is the default because an unchecked claim must never carry the authority of a verified one.'
+        ),
     },
-    async ({ content, memory_type, category, subject, importance, scope, team_id, tags, ttl, project_id }) => {
+    async ({ content, memory_type, category, subject, importance, scope, team_id, tags, ttl, project_id, verified }) => {
       try {
         const projectId = project_id || detectProjectId();
         const body: Record<string, unknown> = {
@@ -310,6 +316,9 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (scope === 'team' && team_id) body.team_id = team_id;
         if (tags && tags.length > 0) body.tags = tags;
         if (ttl) body.ttl = ttl;
+        // Only sent when explicitly stated, so omitting it means unverified
+        // rather than accidentally asserting something was checked.
+        if (verified !== undefined) body.verified = verified;
         const result = await storage.saveMemory(body);
         resetDebt();
         return wrapResult(annotateMergeSuggestion(result));
