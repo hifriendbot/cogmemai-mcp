@@ -1112,9 +1112,9 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
       memory_id: z.coerce.number().int().describe('The source memory ID'),
       related_memory_id: z.coerce.number().int().describe('The target memory ID to link to'),
       relationship: z
-        .enum(['led_to', 'contradicts', 'extends', 'related'])
+        .enum(['led_to', 'contradicts', 'extends', 'related', 'rejected'])
         .describe(
-          'How the memories relate: led_to (A caused B), contradicts (A conflicts with B), extends (A builds on B), related (general connection)'
+          'How the memories relate: led_to (A caused B), contradicts (A conflicts with B), extends (A builds on B), related (general connection), rejected (A is the decision, B is the option considered and turned down; use this so a later session does not re-derive a path already ruled out)'
         ),
     },
     async ({ memory_id, related_memory_id, relationship }) => {
