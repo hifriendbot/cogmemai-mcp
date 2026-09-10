@@ -18,6 +18,18 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### CogmemAi Guard: Your Memory Now Stops Your Ai From Repeating Mistakes (v3.24.0)
+
+Memory that only advises is memory your Ai can ignore under pressure. v3.24.0 adds a guard that turns what your project remembers into enforcement.
+
+A PreToolUse hook judges every shell command before it runs. Six built-in rules cover the operations with no good unattended use: rewriting a whole crontab from a pipeline, destructive SQL against a live database, recursive deletes outside temp and build paths, force-pushing to a shared branch, piping a download into a shell, and killing shared server workers by name. The same rules are applied to what a command carries inside `ssh host "..."`, `bash -c "..."`, and a heredoc fed to a shell, because that payload runs on the far side exactly as written.
+
+Then the part only a memory layer can do. Rule memories you save with `save_rule` become enforceable patterns. Write `NEVER run \`pkill -u www lsphp\`` in a rule and the next session denies that command, over ssh too, with the rule's own words as the reason. No code to edit. Add a `GUARD: <regex>` line to a rule for an exact pattern, or `GUARD: off` to keep a rule advisory.
+
+A Stop hook reviews what actually changed at the end of each turn: credentials pasted into tracked source, version strings that disagree across release files, deleted files, large net deletions, a function now defined in two places, and remembered gotchas about the files that were touched. It reports; it never edits.
+
+Every verdict is logged locally with secrets redacted, so precision is measured rather than assumed. Denials name the deliberate path forward, usually "run it yourself". The guard fails open on any error, and git remains the real undo. See [Guard](#guard) below.
+
 ### Loud Failures on Firewall Blocks (v3.20.0)
 
 When a request to the CogmemAi backend is intercepted by an upstream firewall, CDN, or proxy, the response is HTML, not JSON. Earlier versions tried to JSON-parse it and threw a confusing `Unexpected token '<'` error, then silently retried the same blocked payload. v3.20.0 detects HTML responses, names the blocking layer when it can (NinjaFirewall, Cloudflare, ModSecurity), and surfaces a clear actionable error. Retryable 4xx responses with HTML bodies no longer trigger retry loops. The class of incident that can silently drop memory writes is now loud.
@@ -191,7 +203,42 @@ npx cogmemai-mcp setup <key>    # Setup with API key
 npx cogmemai-mcp verify         # Test connection and show usage
 npx cogmemai-mcp --version      # Show installed version
 npx cogmemai-mcp help           # Show all commands
+npx cogmemai-mcp guard status   # Cached rules for this project and verdict counts
+npx cogmemai-mcp guard sync     # Refresh remembered rules from CogmemAi
+npx cogmemai-mcp guard test "<command>"   # Judge a command without running it
+npx cogmemai-mcp guard log [n]  # Show the last n verdicts
+npx cogmemai-mcp guard install  # Add the guard hooks to an existing setup
 ```
+
+## Guard
+
+CogmemAi Guard is two Claude Code hooks, installed by `setup` (or by `guard install` on an existing setup). Both fail open: any error, any unparseable input, and the command runs untouched. Neither calls a language model.
+
+**Before a command runs** (`PreToolUse` on Bash), the guard judges the command against six built-in rules and the rules this project remembers. A denial is not a refusal to let something happen; it is a refusal to do it unattended, and every denial says how to proceed deliberately.
+
+| Built-in rule | Why it exists |
+|---|---|
+| Rewriting a whole crontab from a pipeline | silently destroys scheduled jobs |
+| `DELETE`, `DROP`, `TRUNCATE`, `UPDATE` sent to a live database client | a scoped `DELETE` is not proof of safety |
+| Recursive delete outside temp, build, and dependency paths | unrecoverable by definition |
+| Force-push to main, master, or prod | overwrites commits that exist only on the remote |
+| Piping a downloaded script into a shell | runs code nobody has read |
+| `pkill` or `killall` of shared server workers by name | aborts every in-flight request on a shared host |
+
+Quoted strings and heredoc bodies are stripped before the rules run, so writing a dangerous command into a notes file is not the same as running it. The payload of `ssh host "..."`, `bash -c "..."`, and a heredoc fed to a shell is judged as if typed directly.
+
+**Rules from memory.** Rule memories (`save_rule`, or any memory with type `rule`) are compiled into patterns and cached locally at session start, so the pre-check needs no network. Two sources:
+
+- A line reading `GUARD: <regex>` is used as written, case-insensitive. `GUARD: off` keeps a rule advisory only.
+- A backticked command that follows NEVER, DO NOT, or MUST NOT in the same sentence, when it is shaped like a command (a command name plus at least one argument, no placeholders). `NEVER run \`pkill -u www lsphp\`` is enough.
+
+When a remembered rule fires, the reason quotes the rule and names it, and the way forward is to run the command yourself or delete the rule with `delete_rule`.
+
+**After a turn** (`Stop`), the guard reviews the working tree: possible secrets added to tracked source, version strings that disagree across release files, deleted files, large net deletions, a function newly defined in more than one place, and remembered gotchas that name the project or a touched file. Silence is the correct output for a clean turn.
+
+**The log.** Every verdict, including silent allows, is appended to `~/.cogmemai/guard-verdicts.jsonl` (override with `COGMEMAI_GUARD_LOG`) with the decision, the rule, a redacted copy of the command, the session, and the working directory. `guard status` summarizes it.
+
+**What it is not.** It is not a sandbox and not a substitute for git, backups, or review. A blanket `Bash` entry in `permissions.allow` makes an "ask" verdict inert, which is why the guard denies rather than asks.
 
 ## Manual Setup
 

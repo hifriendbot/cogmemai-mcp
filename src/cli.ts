@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdir
 import { homedir } from 'os';
 import { join } from 'path';
 import { API_BASE, VERSION, FLAG_DIR, SESSION_EXPIRY_SECONDS, COMPACTION_FLAG_MAX_AGE, SUMMARY_CONFIG, HOOK_FETCH_TIMEOUT_MS, STALE_FLAG_MAX_AGE, SMART_RECALL_COOLDOWN, SMART_RECALL_MAX_CHARS, SMART_RECALL_MIN_MSG_LENGTH, SMART_RECALL_MIN_MATCH_SCORE, AUTO_EXTRACT_COOLDOWN, AUTO_EXTRACT_MIN_USER_MESSAGES, AUTO_EXTRACT_MIN_MSG_LENGTH, POST_TOOL_USE_MAX_FIELD_CHARS, POST_TOOL_USE_MAX_EVENTS, POST_TOOL_USE_SKIP_TOOLS } from './config.js';
+import { syncGuardRules, installGuardHooks } from './guard-hooks.js';
 
 // Helper: read session_id from stdin hook input.
 // `prompt` is populated for UserPromptSubmit hooks (Claude Code passes the
@@ -537,7 +538,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
 
   const hookResult = configureHooks();
   if (hookResult.success) {
-    success('Hooks installed (compaction recovery + auto-session-summary + autonomous event capture)');
+    success('Hooks installed (compaction recovery + auto-session-summary + autonomous event capture + guard)');
     log(`  ${DIM}Context auto-saves before compaction, reloads after, and sessions save automatically${RESET}`);
   } else {
     warn(`Could not install hooks: ${hookResult.error}`);
@@ -1193,6 +1194,11 @@ export async function runHookSessionStart(): Promise<void> {
     } catch (err) {
       logHookError('sessionstart', err);
     }
+
+    // v3.24.0: refresh the guard's remembered-rule cache for this project so
+    // the PreToolUse hook can enforce rules with no network call of its own.
+    // Best effort; a failure leaves the previous cache in place.
+    await syncGuardRules(apiKey, projectId);
 
     if (!res.ok) {
       let errBody = '';
@@ -2391,6 +2397,15 @@ export function configureHooks(): { success: boolean; error?: string } {
     // Write settings back
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 
+    // v3.24.0: CogmemAi Guard. PreToolUse on Bash judges commands against
+    // the static rules and the project's remembered rules; a Stop hook
+    // reviews the working tree. Written by its own helper so `guard install`
+    // can add them on an existing setup without re-running the wizard.
+    const guard = installGuardHooks();
+    if (!guard.success) {
+      return { success: false, error: guard.error || 'Failed to configure guard hooks' };
+    }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to configure hooks' };
@@ -2417,6 +2432,15 @@ export function showHelp(): void {
   log(`    cogmemai-mcp hook context-reload Reload context after compaction / smart recall`);
   log(`    cogmemai-mcp hook posttooluse    Capture tool events for autonomous memory`);
   log(`    cogmemai-mcp hook stop           Auto-save session summary on exit`);
+  log(`    cogmemai-mcp hook pretooluse     Guard: judge a shell command before it runs (v3.24+)`);
+  log(`    cogmemai-mcp hook guard-review   Guard: review what changed at the end of a turn`);
+  log('');
+  log(`  ${BOLD}Guard:${RESET}`);
+  log(`    cogmemai-mcp guard status        Cached rules for this project and verdict counts`);
+  log(`    cogmemai-mcp guard sync          Refresh remembered rules from CogmemAi`);
+  log(`    cogmemai-mcp guard test "<cmd>"  Judge a command without running it`);
+  log(`    cogmemai-mcp guard log [n]       Show the last n verdicts`);
+  log(`    cogmemai-mcp guard install       Add the guard hooks to an existing setup`);
   log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);

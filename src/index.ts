@@ -12,6 +12,7 @@
 
 import { VERSION, STORAGE_MODE } from './config.js';
 import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop, runHookPostToolUse, runHookPostToolUseEdit, runHookSessionStart } from './cli.js';
+import { runHookPreToolUse, runHookGuardReview, runGuardCli } from './guard-hooks.js';
 
 // Shared state: latest version from npm (set by checkForUpdate, read by tools)
 export let latestVersion: string | null = null;
@@ -42,10 +43,20 @@ if (subcommand === 'setup') {
     runHookPostToolUseEdit().catch(() => process.exit(0));
   } else if (hookName === 'sessionstart') {
     runHookSessionStart().catch(() => process.exit(0));
+  } else if (hookName === 'pretooluse') {
+    // Guard: fail open on any error, so a crash never blocks a command.
+    runHookPreToolUse().catch(() => process.exit(0));
+  } else if (hookName === 'guard-review') {
+    runHookGuardReview().catch(() => process.exit(0));
   } else {
-    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload, stop, posttooluse, posttooluse-edit, sessionstart`);
+    console.error(`Unknown hook: ${hookName}. Available: precompact, context-reload, stop, posttooluse, posttooluse-edit, sessionstart, pretooluse, guard-review`);
     process.exit(1);
   }
+} else if (subcommand === 'guard') {
+  runGuardCli(process.argv.slice(3)).catch((err) => {
+    console.error('Guard failed:', err.message || err);
+    process.exit(1);
+  });
 } else if (subcommand === 'verify') {
   runVerify().catch((err) => {
     console.error('Verify failed:', err.message || err);
