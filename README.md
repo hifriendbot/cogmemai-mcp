@@ -30,6 +30,8 @@ A Stop hook reviews what actually changed at the end of each turn: credentials p
 
 Every verdict is logged locally with secrets redacted, so precision is measured rather than assumed. Denials name the deliberate path forward, usually "run it yourself". The guard fails open on any error, and git remains the real undo. See [Guard](#guard) below.
 
+v3.25.0 extends it past Claude Code: `guard shell-install` hooks every `bash -c` and `zsh -c` on the machine through `BASH_ENV`, so Cursor, Codex, Gemini CLI, and plain scripts get the same guard, the same remembered rules, and the same log.
+
 ### Loud Failures on Firewall Blocks (v3.20.0)
 
 When a request to the CogmemAi backend is intercepted by an upstream firewall, CDN, or proxy, the response is HTML, not JSON. Earlier versions tried to JSON-parse it and threw a confusing `Unexpected token '<'` error, then silently retried the same blocked payload. v3.20.0 detects HTML responses, names the blocking layer when it can (NinjaFirewall, Cloudflare, ModSecurity), and surfaces a clear actionable error. Retryable 4xx responses with HTML bodies no longer trigger retry loops. The class of incident that can silently drop memory writes is now loud.
@@ -208,6 +210,8 @@ npx cogmemai-mcp guard sync     # Refresh remembered rules from CogmemAi
 npx cogmemai-mcp guard test "<command>"   # Judge a command without running it
 npx cogmemai-mcp guard log [n]  # Show the last n verdicts
 npx cogmemai-mcp guard install  # Add the guard hooks to an existing setup
+npx cogmemai-mcp guard shell-install   # Guard bash -c / zsh -c from any tool, not just Claude Code
+npx cogmemai-mcp guard shell-remove    # Undo shell-install
 ```
 
 ## Guard
@@ -237,6 +241,8 @@ When a remembered rule fires, the reason quotes the rule and names it, and the w
 **After a turn** (`Stop`), the guard reviews the working tree: possible secrets added to tracked source, version strings that disagree across release files, deleted files, large net deletions, a function newly defined in more than one place, and remembered gotchas that name the project or a touched file. Silence is the correct output for a clean turn.
 
 **The log.** Every verdict, including silent allows, is appended to `~/.cogmemai/guard-verdicts.jsonl` (override with `COGMEMAI_GUARD_LOG`) with the decision, the rule, a redacted copy of the command, the session, and the working directory. `guard status` summarizes it.
+
+**Every tool, not just Claude Code (v3.25.0).** Cursor, Codex, Gemini CLI, Cline, and plain scripts all end up running `bash -c "<command>"`, and non-interactive bash sources the file named in `BASH_ENV` before it runs anything, with the full command in `BASH_EXECUTION_STRING`. `cogmemai-mcp guard shell-install` writes that file and points `BASH_ENV` at it, so every such shell hands its command to the same engine, the same rule cache, and the same log, and exits with status 2 and the reason on stderr when denied. zsh is covered through `ZSH_EXECUTION_STRING`. Set `COGMEMAI_GUARD_OFF=1` to skip one process; `guard shell-remove` undoes the install. Not covered: `sh -c` on systems where `sh` is dash, and the body of a script file (only the `-c` string is judged).
 
 **What it is not.** It is not a sandbox and not a substitute for git, backups, or review. A blanket `Bash` entry in `permissions.allow` makes an "ask" verdict inert, which is why the guard denies rather than asks.
 

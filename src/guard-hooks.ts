@@ -18,6 +18,17 @@
  *   guard test <cmd>   Judge a command without running it.
  *   guard log [n]      Show the last n verdicts.
  *   guard install      Add the guard hooks to ~/.claude/settings.json.
+ *   guard check <cmd>  Judge a command for the shell adapter: exit 0 allow,
+ *                      exit 2 deny with the reason on stderr.
+ *   guard shell-install / shell-remove
+ *                      The shell adapter. Every agent eventually runs
+ *                      `bash -c "<command>"`, and non-interactive bash
+ *                      sources the file named in BASH_ENV first, with the
+ *                      whole command in BASH_EXECUTION_STRING. A sourced
+ *                      script hands that string to `guard check` and exits
+ *                      before anything runs when it is denied. One engine,
+ *                      one rule cache, one log, for every tool that opens
+ *                      a shell: Cursor, Codex, Gemini CLI, plain scripts.
  */
 
 import { execSync } from 'child_process';
@@ -290,11 +301,169 @@ export function installGuardHooks(): { success: boolean; added: string[]; error?
   }
 }
 
+// ── Shell adapter ─────────────────────────────────────────────
+
+export const GUARD_SH_PATH = join(FLAG_DIR, 'guard.sh');
+const SHELL_MARKER = '# cogmemai-guard';
+
+/**
+ * The sourced script. Kept POSIX-plain except where it tests for bash or
+ * zsh specifically, because it runs before anything else in every shell.
+ * COGMEMAI_GUARD_OFF=1 disables it for one process, and is set on the check
+ * itself so the guard can never recurse into its own shell.
+ */
+export const GUARD_SH = `${SHELL_MARKER} shell adapter (managed by \`cogmemai-mcp guard shell-install\`)
+# Judges the command string of a non-interactive shell before it runs.
+# Exit 0 = allow, exit 2 = denied by CogmemAi Guard (reason on stderr).
+if [ -z "$COGMEMAI_GUARD_OFF" ] && command -v cogmemai-mcp >/dev/null 2>&1; then
+  __cogmemai_guard_string=""
+  if [ -n "$BASH_VERSION" ] && [ -n "$BASH_EXECUTION_STRING" ]; then
+    __cogmemai_guard_string="$BASH_EXECUTION_STRING"
+  elif [ -n "$ZSH_VERSION" ] && [ -n "$ZSH_EXECUTION_STRING" ]; then
+    __cogmemai_guard_string="$ZSH_EXECUTION_STRING"
+  fi
+  if [ -n "$__cogmemai_guard_string" ]; then
+    if ! COGMEMAI_GUARD_OFF=1 cogmemai-mcp guard check "$__cogmemai_guard_string"; then
+      exit 2
+    fi
+  fi
+  unset __cogmemai_guard_string
+fi
+`;
+
+function rcFiles(): string[] {
+  const h = homedir();
+  return [join(h, '.bashrc'), join(h, '.bash_profile'), join(h, '.profile'), join(h, '.zshenv')];
+}
+
+/** Lines the installer appends. BASH_ENV is exported so shells started from these shells inherit it. */
+function rcSnippet(): string {
+  const p = GUARD_SH_PATH.replace(/\\/g, '/');
+  return `\n${SHELL_MARKER}\nexport BASH_ENV="${p}"\n[ -f "${p}" ] && . "${p}"\n${SHELL_MARKER} end\n`;
+}
+
+function stripSnippet(text: string): string {
+  return text.replace(new RegExp(`\\n?${SHELL_MARKER}\\n[\\s\\S]*?${SHELL_MARKER} end\\n?`, 'g'), '\n').replace(/\n{3,}$/, '\n\n');
+}
+
+export function installShellAdapter(): { written: string[]; envSet: boolean; note: string } {
+  mkdirSync(FLAG_DIR, { recursive: true });
+  writeFileSync(GUARD_SH_PATH, GUARD_SH);
+  const written: string[] = [];
+  for (const rc of rcFiles()) {
+    let text = '';
+    try {
+      text = readFileSync(rc, 'utf-8');
+    } catch {
+      /* create it */
+    }
+    if (text.includes(SHELL_MARKER)) continue;
+    writeFileSync(rc, text + rcSnippet());
+    written.push(rc);
+  }
+  // Processes launched from a desktop session, not from a shell, only see
+  // BASH_ENV if it is set at the user level. On Windows that is one setx;
+  // elsewhere it is the user's login environment, which the rc files cover
+  // for anything started from a terminal.
+  let envSet = false;
+  let note = '';
+  if (process.platform === 'win32') {
+    try {
+      execSync(`setx BASH_ENV "${GUARD_SH_PATH}"`, { stdio: 'pipe', timeout: 10000 });
+      envSet = true;
+      note = 'BASH_ENV set for your Windows user; new processes pick it up, already-open apps need a restart.';
+    } catch {
+      note = `Could not set BASH_ENV for the user. Set it yourself: BASH_ENV=${GUARD_SH_PATH}`;
+    }
+  } else if (process.platform === 'darwin') {
+    try {
+      execSync(`launchctl setenv BASH_ENV "${GUARD_SH_PATH}"`, { stdio: 'pipe', timeout: 10000 });
+      envSet = true;
+      note = 'BASH_ENV set for GUI-launched apps via launchctl; terminals get it from the rc files.';
+    } catch {
+      note = 'Terminals get BASH_ENV from the rc files. For GUI-launched editors run: launchctl setenv BASH_ENV ' + GUARD_SH_PATH;
+    }
+  } else {
+    note = 'Terminals get BASH_ENV from the rc files. For editors launched from a desktop session, add BASH_ENV to ~/.pam_environment or your session environment.';
+  }
+  return { written, envSet, note };
+}
+
+export function removeShellAdapter(): string[] {
+  const touched: string[] = [];
+  for (const rc of rcFiles()) {
+    try {
+      const text = readFileSync(rc, 'utf-8');
+      if (!text.includes(SHELL_MARKER)) continue;
+      writeFileSync(rc, stripSnippet(text));
+      touched.push(rc);
+    } catch {
+      /* no such file */
+    }
+  }
+  try {
+    if (existsSync(GUARD_SH_PATH)) {
+      writeFileSync(GUARD_SH_PATH, `${SHELL_MARKER} removed; safe to delete\n`);
+    }
+  } catch {
+    /* ignore */
+  }
+  if (process.platform === 'win32') {
+    try {
+      execSync('reg delete HKCU\\Environment /v BASH_ENV /f', { stdio: 'pipe', timeout: 10000 });
+    } catch {
+      /* was not set */
+    }
+  } else if (process.platform === 'darwin') {
+    try {
+      execSync('launchctl unsetenv BASH_ENV', { stdio: 'pipe', timeout: 10000 });
+    } catch {
+      /* ignore */
+    }
+  }
+  return touched;
+}
+
 // ── CLI ───────────────────────────────────────────────────────
 
 export async function runGuardCli(args: string[]): Promise<void> {
   const sub = (args[0] || 'status').toLowerCase();
   const cwd = process.cwd();
+
+  if (sub === 'check') {
+    // Shell adapter entry point. Silent and exit 0 on allow; reason on
+    // stderr and exit 2 on deny. Any internal failure allows (fail open).
+    const command = args.slice(1).join(' ');
+    if (!command) return;
+    try {
+      const { rules } = loadRules(cwd);
+      const v = decide(command, rules);
+      logVerdict({ session_id: 'shell', cwd }, command, v, rules.length);
+      if (v) {
+        console.error('CogmemAi Guard. ' + v.reason);
+        process.exit(2);
+      }
+    } catch (err) {
+      logError('guard-check', err);
+    }
+    return;
+  }
+
+  if (sub === 'shell-install') {
+    const r = installShellAdapter();
+    console.log(`Shell adapter written to ${GUARD_SH_PATH}`);
+    console.log(r.written.length ? `Sourced from: ${r.written.join(', ')}` : 'rc files already had it.');
+    console.log(r.note);
+    console.log('Try it: bash -c "cogmemai-mcp guard test \'crontab -l | crontab -\'"  then  bash -c "crontab -l | crontab -"');
+    return;
+  }
+
+  if (sub === 'shell-remove') {
+    const touched = removeShellAdapter();
+    console.log(touched.length ? `Removed from: ${touched.join(', ')}` : 'Shell adapter was not installed in any rc file.');
+    console.log('BASH_ENV cleared for new processes. Open shells keep it until restarted.');
+    return;
+  }
 
   if (sub === 'sync') {
     const key = resolveKey();

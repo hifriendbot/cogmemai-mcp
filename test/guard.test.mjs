@@ -195,3 +195,39 @@ test('secrets are redacted before logging', () => {
 test('stripQuoted removes data but keeps structure', () => {
   assert.equal(stripQuoted("echo 'a | b' | wc").replace(/\s+/g, ' '), 'echo | wc');
 });
+
+// ── Shell adapter ───────────────────────────────────────────
+
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { GUARD_SH } from '../build/guard-hooks.js';
+
+const haveBash = spawnSync('bash', ['-c', 'echo ok'], { encoding: 'utf-8' }).stdout?.trim() === 'ok';
+
+test('shell adapter denies via BASH_ENV before anything runs', { skip: !haveBash && 'bash not available' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cogmemai-guard-'));
+  // A shim so the sourced script finds this build as `cogmemai-mcp`.
+  const shim = join(dir, 'cogmemai-mcp');
+  writeFileSync(shim, `#!/bin/sh\nexec node "${resolve('build/index.js').replace(/\\/g, '/')}" "$@"\n`);
+  chmodSync(shim, 0o755);
+  const guardSh = join(dir, 'guard.sh');
+  writeFileSync(guardSh, GUARD_SH);
+  const env = { ...process.env, PATH: `${dir}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH}`, BASH_ENV: guardSh, COGMEMAI_GUARD_LOG: join(dir, 'log.jsonl') };
+  const run = (cmd, extra = {}) => spawnSync('bash', ['-c', cmd], { encoding: 'utf-8', env: { ...env, ...extra } });
+
+  const denied = run('crontab -l | grep -v x | crontab -');
+  assert.equal(denied.status, 2);
+  assert.match(denied.stderr, /CogmemAi Guard/);
+
+  const remote = run('ssh deploy@203.0.113.10 "pkill -u www lsphp"');
+  assert.equal(remote.status, 2);
+
+  const ok = run('echo ok');
+  assert.equal(ok.status, 0);
+  assert.equal(ok.stdout.trim(), 'ok');
+
+  const bypass = run('echo bypassed', { COGMEMAI_GUARD_OFF: '1' });
+  assert.equal(bypass.status, 0);
+});

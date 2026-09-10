@@ -2441,6 +2441,8 @@ export function showHelp(): void {
   log(`    cogmemai-mcp guard test "<cmd>"  Judge a command without running it`);
   log(`    cogmemai-mcp guard log [n]       Show the last n verdicts`);
   log(`    cogmemai-mcp guard install       Add the guard hooks to an existing setup`);
+  log(`    cogmemai-mcp guard shell-install Guard every bash -c / zsh -c from any tool, not just Claude Code (v3.25+)`);
+  log(`    cogmemai-mcp guard shell-remove  Undo shell-install`);
   log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);
