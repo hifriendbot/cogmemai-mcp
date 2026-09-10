@@ -349,8 +349,12 @@ function stripSnippet(text: string): string {
 export function installShellAdapter(): { written: string[]; envSet: boolean; note: string } {
   mkdirSync(FLAG_DIR, { recursive: true });
   writeFileSync(GUARD_SH_PATH, GUARD_SH);
+  // Only rc files that already exist are touched, so a Windows machine does
+  // not sprout a .zshenv it never had. If none exist, .bashrc is created.
   const written: string[] = [];
-  for (const rc of rcFiles()) {
+  let targets = rcFiles().filter((rc) => existsSync(rc));
+  if (targets.length === 0) targets = [join(homedir(), '.bashrc')];
+  for (const rc of targets) {
     let text = '';
     try {
       text = readFileSync(rc, 'utf-8');
