@@ -241,11 +241,30 @@ export async function runHookGuardReview(): Promise<void> {
     const input = readStdinJson();
     if (input.stop_hook_active) return;
     const cwd = String(input.cwd || process.cwd());
+    // One review per distinct change set per session. The fingerprint of
+    // the last reviewed tree is kept in a per-session file so an unchanged
+    // dirty tree does not produce the same notes after every message.
+    const fpPath = join(FLAG_DIR, `guard-review-${safeName(String(input.session_id || 'nosession'))}.txt`);
+    let lastFingerprint = '';
+    try {
+      lastFingerprint = readFileSync(fpPath, 'utf-8');
+    } catch {
+      /* first review this session */
+    }
     const notes = await reviewWorkingTree(cwd, {
       apiKey: resolveKey(),
       apiBase: API_BASE,
       timeoutMs: HOOK_FETCH_TIMEOUT_MS,
       userAgent: `cogmemai-mcp/${VERSION}`,
+      lastFingerprint,
+      onFingerprint: (fp) => {
+        try {
+          mkdirSync(FLAG_DIR, { recursive: true });
+          writeFileSync(fpPath, fp);
+        } catch {
+          /* best effort */
+        }
+      },
     });
     if (notes.length === 0) return; // a clean turn earns silence
     const body =

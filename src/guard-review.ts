@@ -218,11 +218,28 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
     clearTimeout(t);
   }
 
+  return pickLandmines(data.memories || [], files);
+}
+
+/**
+ * Choose which recalled memories deserve a line on screen. Pure, so it is
+ * testable against the memories that were wrongly shown.
+ *
+ * The bar is deliberately high, because every line here lands in the
+ * user's chat: the sentence shown must itself name one of the files being
+ * touched AND read like a standing instruction. Anchoring on the project
+ * name was removed after a session in the main product repository surfaced
+ * an email-verification policy and a note about an unrelated site's HTML,
+ * both of which mentioned the project and neither of which concerned the
+ * edit. A reviewer that adds reading without adding signal is noise, and
+ * the person reading it has plenty to read already.
+ */
+export function pickLandmines(memories: Array<{ content?: string }>, files: string[]): string[] {
   const anchors = new Set<string>();
-  for (const c of [project, ...files.slice(0, 12).map((f) => basename(f))]) {
-    const lower = c.toLowerCase();
+  for (const f of files.slice(0, 12)) {
+    const lower = basename(f).toLowerCase();
     const stem = lower.replace(/\.[^.]+$/, '');
-    if (GENERIC.has(stem) || stem.length <= 3) continue;
+    if (GENERIC.has(stem) || stem.length <= 4) continue;
     anchors.add(lower);
     anchors.add(stem);
   }
@@ -230,29 +247,41 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
   const anchorRe = new RegExp('(?<![A-Za-z0-9])(' + [...anchors].sort().map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z0-9])', 'i');
 
   const notes: string[] = [];
-  for (const mem of (data.memories || []).slice(0, 6)) {
+  for (const mem of memories.slice(0, 6)) {
     const content = mem && typeof mem.content === 'string' ? mem.content : '';
     if (!content) continue;
     const flat = content.replace(/\s+/g, ' ').replace(/[*_`#]+/g, '').trim();
-    if (!anchorRe.test(flat)) continue;
     for (const sentence of flat.split(/(?<=[.!;])\s+/)) {
       let s = sentence.trim();
-      if (s.length < 25 || !RULE_SENTENCE.test(s)) continue;
-      if (s.length > 230) s = s.slice(0, 227).replace(/\s\S*$/, '') + '...';
+      if (s.length < 25 || !RULE_SENTENCE.test(s) || !anchorRe.test(s)) continue;
+      if (s.length > 200) s = s.slice(0, 197).replace(/\s\S*$/, '') + '...';
       notes.push('Remembered: ' + s);
       break;
     }
-    if (notes.length >= 2) break;
+    if (notes.length >= 1) break;
   }
   return notes;
 }
 
+/**
+ * A fingerprint of the working tree's change set. When it matches the one
+ * from the previous review, nothing new happened this turn and the review
+ * stays silent: a tree that has carried three edited files all day must
+ * not produce the same notes after every message.
+ */
+export function treeFingerprint(root: string): string {
+  return [git(['status', '--porcelain'], root), git(['diff', '--shortstat'], root), git(['diff', '--cached', '--shortstat'], root)].join('|');
+}
+
 /** Review the working tree at `cwd`. Returns advisory notes; empty means a clean turn. */
-export async function reviewWorkingTree(cwd: string, opt: ReviewOptions): Promise<string[]> {
+export async function reviewWorkingTree(cwd: string, opt: ReviewOptions & { lastFingerprint?: string; onFingerprint?: (fp: string) => void }): Promise<string[]> {
   const root = git(['rev-parse', '--show-toplevel'], cwd).trim();
   if (!root) return [];
   const { files, deleted } = changedFiles(root);
   if (files.length === 0 && deleted.length === 0) return [];
+  const fp = treeFingerprint(root);
+  if (opt.lastFingerprint && opt.lastFingerprint === fp) return [];
+  if (opt.onFingerprint) opt.onFingerprint(fp);
   const lines = addedLines(root);
   const notes: string[] = [];
   notes.push(...checkSecrets(lines));

@@ -196,6 +196,35 @@ test('stripQuoted removes data but keeps structure', () => {
   assert.equal(stripQuoted("echo 'a | b' | wc").replace(/\s+/g, ' '), 'echo | wc');
 });
 
+// ── End-of-turn review precision ────────────────────────────
+
+import { pickLandmines } from '../build/guard-review.js';
+
+test('review shows a remembered line only when the sentence names a touched file', () => {
+  // The two memories that were wrongly surfaced during an edit of
+  // public/templates/guard-landing.php and public/class-public.php in the
+  // main product repository. Both mention the project; neither concerns
+  // the files being edited.
+  const noisy = [
+    { content: 'Scott: "Make sure that all of our products that demand a user signup also demand an email verification", with "don\'t break anything" as the binding constraint. Applies to hifriendbot signup flows.' },
+    { content: 'The structured GeoDirectory fields never survive htmltotext() on a rendered listing page (they are inside markup/JSON-LD that gets stripped), while the rendered page is ~341KB. Do not rely on it for hifriendbot crawls.' },
+  ];
+  const files = ['public/templates/guard-landing.php', 'public/class-public.php'];
+  assert.deepEqual(pickLandmines(noisy, files), []);
+
+  // A memory whose instruction sentence names the touched file is shown, once, trimmed.
+  const relevant = [
+    { content: 'History of the public class. NEVER register a shortcode in class-public.php without gating its stylesheet enqueue on the shortcode string, or every page loads it.' },
+    { content: 'ALWAYS keep guard-landing.php free of private hostnames.' },
+  ];
+  const notes = pickLandmines(relevant, files);
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /^Remembered: NEVER register a shortcode in class-public.php/);
+
+  // Generic or short file names never anchor anything.
+  assert.deepEqual(pickLandmines(relevant, ['index.php', 'api.ts', 'a.js']), []);
+});
+
 // ── Shell adapter ───────────────────────────────────────────
 
 import { spawnSync } from 'node:child_process';
