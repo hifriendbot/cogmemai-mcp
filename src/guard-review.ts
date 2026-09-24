@@ -186,6 +186,11 @@ function checkDuplicateDefinitions(root: string, lines: string[]): string[] {
 // which is past what a Stop hook can wait for. The server caps at 30K for
 // clients with more patience.
 const INTENT_DIFF_MAX_CHARS = 16_000;
+// An untracked file counts as this turn's work only if it was written
+// recently. Repositories accumulate months-old scratch files that git
+// reports as new forever, and the first live scoreboard judged a pile of
+// April marketing drafts as "this change" and scored the project at 45%.
+const UNTRACKED_RECENT_MS = 6 * 3600_000;
 
 /**
  * What changed this turn, with enough context for a reader to follow: the
@@ -202,7 +207,8 @@ function turnDiff(root: string): string {
     const path = rel.trim();
     if (!path || !CODE_EXT.has(extname(path).toLowerCase())) continue;
     try {
-      if (statSync(join(root, path)).size > 200_000) continue;
+      const st = statSync(join(root, path));
+      if (st.size > 200_000 || Date.now() - st.mtimeMs > UNTRACKED_RECENT_MS) continue;
       const head = readFileSync(join(root, path), 'utf-8').split('\n').slice(0, 200);
       parts.push(`diff --git a/${path} b/${path}\nnew file\n+++ b/${path}\n` + head.map((l) => '+' + l).join('\n'));
     } catch {
