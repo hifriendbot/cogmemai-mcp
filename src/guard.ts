@@ -372,3 +372,97 @@ const REDACT = /((?:password|passwd|pwd|token|secret|api[_-]?key|authorization)\
 export function redact(command: string): string {
   return command.replace(REDACT, (_m, a, b, c, d) => (a || b || c || d || '') + '[redacted]');
 }
+
+
+// ── Intent ────────────────────────────────────────────────────
+//
+// The intent document is the owner's plain-English source of truth for a
+// project. Two things here are pure so they can be tested: pulling the
+// enforceable sentences out of it, and turning the server's judgment into
+// the few lines a person will actually read at the end of a turn.
+
+export interface IntentViolation {
+  intent: string;
+  change: string;
+}
+
+export interface IntentCheckResult {
+  judged: boolean;
+  reason?: string;
+  summary?: string;
+  covered?: string[];
+  uncovered?: string[];
+  violations?: IntentViolation[];
+  coverage?: number | null;
+  proposed_update?: string;
+}
+
+/**
+ * The section of an intent document whose sentences the guard may enforce.
+ * A heading that reads like Invariants, Rules, Must, Never, Always,
+ * Non-negotiables or Constraints opens it; the next heading closes it.
+ * Everything else in the document is context for the judged review, not a
+ * source of patterns.
+ */
+export function extractInvariants(markdown: string): string {
+  const out: string[] = [];
+  let inside = false;
+  for (const line of String(markdown || '').split('\n')) {
+    const h = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (h) {
+      inside = /\b(invariants?|rules?|must|never|always|non-negotiables?|constraints?)\b/i.test(h[1]);
+      continue;
+    }
+    if (inside) out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
+/** The intent document in the shape compileMemoryRules reads, or null when it has no invariants. */
+export function intentAsRuleMemory(intent: { id?: number | string; content: string }): Record<string, unknown> | null {
+  const invariants = extractInvariants(intent.content);
+  if (!invariants) return null;
+  return { id: Number(intent.id) || 0, memory_type: 'rule', subject: 'intent', content: invariants };
+}
+
+/** Shorten for one line, ending on a sentence when one falls in the second half of the budget. */
+function trimTo(s: string, n: number): string {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= n) return t;
+  const head = t.slice(0, n - 3);
+  const end = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+  if (end >= Math.floor(n / 2)) return head.slice(0, end + 1);
+  return head.trimEnd() + '...';
+}
+
+/**
+ * The lines a person reads at the end of a turn. A change the intent already
+ * covers earns silence, like every other clean review. The summary appears
+ * only when there is a conflict or a gap to act on, or on every judged turn
+ * when `verbose` asks for it.
+ */
+export function formatIntentNotes(r: IntentCheckResult | null | undefined, verbose = false): string[] {
+  if (!r || !r.judged) return [];
+  const violations = (Array.isArray(r.violations) ? r.violations : []).filter((v) => v && (v.intent || v.change));
+  const uncovered = (Array.isArray(r.uncovered) ? r.uncovered : []).filter((u) => typeof u === 'string' && u.trim());
+  const notes: string[] = [];
+  if (violations.length === 0 && uncovered.length === 0) {
+    if (verbose && r.summary) notes.push(`Intent check: ${trimTo(r.summary, 300)} Your intent covers it.`);
+    return notes;
+  }
+  if (r.summary) notes.push(`Intent check: ${trimTo(r.summary, 300)}`);
+  for (const v of violations.slice(0, 2)) {
+    notes.push(
+      v.intent
+        ? `Conflicts with your intent ("${trimTo(v.intent, 140)}"): ${trimTo(v.change, 200)}`
+        : `Conflicts with your intent: ${trimTo(v.change, 200)}`
+    );
+  }
+  if (uncovered.length) {
+    notes.push(
+      `Not in your intent yet: ${uncovered.slice(0, 3).map((u) => trimTo(u, 120)).join('; ')}. ` +
+        'Say "add that to the intent" to record it, or ask for it to be reverted.'
+    );
+  }
+  return notes;
+}

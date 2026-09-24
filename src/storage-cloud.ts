@@ -66,6 +66,17 @@ export class CloudStorage implements StorageBackend {
     return api(`/cogmemai/memory/${id}/restore`, 'POST', {}, undefined, this.apiKey);
   }
 
+  // ─── Project Intent (v3.26.0) ──────────────────────────
+
+  async getIntent(params: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/intent', 'GET', params, undefined, this.apiKey);
+  }
+
+  async setIntent(body: Record<string, unknown>): Promise<unknown> {
+    // Sent in the clear on purpose: the server has to read it to judge diffs against it.
+    return api('/cogmemai/intent', 'POST', body, undefined, this.apiKey);
+  }
+
   async listTrash(params: Record<string, unknown>): Promise<unknown> {
     return api('/cogmemai/trash', 'GET', params, undefined, this.apiKey);
   }

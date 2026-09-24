@@ -6,12 +6,16 @@
  * remember a landmine near the files that were just touched? That second
  * half is the part only a memory layer can do.
  *
- * Fail open, never modify anything, never call a language model.
+ * Fail open, never modify anything, never call a language model. The
+ * intent review (v3.26.0) keeps that promise by sending the turn's diff to
+ * the CogmemAi server to be judged there.
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readFileSync, statSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { basename, extname, join } from 'path';
+import { FLAG_DIR } from './config.js';
+import { formatIntentNotes, type IntentCheckResult } from './guard.js';
 
 const GIT_TIMEOUT = 8000;
 const MAX_DIFF_BYTES = 400_000;
@@ -176,6 +180,117 @@ function checkDuplicateDefinitions(root: string, lines: string[]): string[] {
   return notes;
 }
 
+// ── Intent review ─────────────────────────────────────────────
+
+// 16K characters judges in about five seconds on the server; 30K took eight,
+// which is past what a Stop hook can wait for. The server caps at 30K for
+// clients with more patience.
+const INTENT_DIFF_MAX_CHARS = 16_000;
+
+/**
+ * What changed this turn, with enough context for a reader to follow: the
+ * unstaged and staged diffs plus the head of every new code file, capped so
+ * a sweeping refactor still fits one request and one hook budget.
+ */
+function turnDiff(root: string): string {
+  const parts: string[] = [];
+  for (const args of [['diff', '--unified=2'], ['diff', '--cached', '--unified=2']]) {
+    const d = git(args, root);
+    if (d.trim()) parts.push(d);
+  }
+  for (const rel of git(['ls-files', '--others', '--exclude-standard'], root).split('\n').slice(0, 20)) {
+    const path = rel.trim();
+    if (!path || !CODE_EXT.has(extname(path).toLowerCase())) continue;
+    try {
+      if (statSync(join(root, path)).size > 200_000) continue;
+      const head = readFileSync(join(root, path), 'utf-8').split('\n').slice(0, 200);
+      parts.push(`diff --git a/${path} b/${path}\nnew file\n+++ b/${path}\n` + head.map((l) => '+' + l).join('\n'));
+    } catch {
+      /* unreadable */
+    }
+  }
+  const all = parts.join('\n');
+  return all.length > INTENT_DIFF_MAX_CHARS ? all.slice(0, INTENT_DIFF_MAX_CHARS) + '\n[diff truncated]' : all;
+}
+
+function logIntent(entry: Record<string, unknown>): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    appendFileSync(join(FLAG_DIR, 'intent-log.jsonl'), JSON.stringify(entry) + '\n');
+  } catch {
+    /* logging never affects the review */
+  }
+}
+
+/**
+ * Ask CogmemAi to judge this turn's changes against the project's intent
+ * document and say, in plain English, what changed and whether the intent
+ * covers it. The judgment runs on the server; this side only ships the diff
+ * and reads the answer, so the hook still never calls a model. Silent when
+ * the project has no intent, when nothing changed, and when the change is
+ * covered.
+ */
+async function intentReview(root: string, files: string[], opt: ReviewOptions): Promise<string[]> {
+  if (!opt.intent || !opt.apiKey || !opt.projectId) return [];
+  const diff = turnDiff(root);
+  if (diff.trim().length < 10) return [];
+  const commit = git(['rev-parse', '--short', 'HEAD'], root).trim();
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), opt.intentTimeoutMs || 9000);
+  const started = Date.now();
+  let result: IntentCheckResult | null = null;
+  // A failed check is logged like a judged one, with the reason, because a
+  // review that fails quietly nine times out of ten looks exactly like a
+  // review that found nothing wrong.
+  const failed = (why: string): string[] => {
+    logIntent({
+      ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      project: opt.projectId,
+      files: files.length,
+      diff_chars: diff.length,
+      ms: Date.now() - started,
+      judged: false,
+      reason: why,
+      violations: 0,
+      uncovered: 0,
+      coverage: null,
+      summary: '',
+      shown: 0,
+    });
+    return [];
+  };
+  try {
+    const res = await fetch(`${opt.apiBase}/cogmemai/intent-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opt.apiKey}`, 'User-Agent': opt.userAgent },
+      body: JSON.stringify({ project_id: opt.projectId, diff, files: files.slice(0, 40), commit }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return failed(`http_${res.status}`);
+    result = (await res.json()) as IntentCheckResult;
+  } catch (err) {
+    return failed(err instanceof Error && err.name === 'AbortError' ? 'timeout' : 'fetch_error');
+  } finally {
+    clearTimeout(t);
+  }
+  const notes = formatIntentNotes(result, process.env.COGMEMAI_INTENT_VERBOSE === '1');
+  logIntent({
+    ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    project: opt.projectId,
+    files: files.length,
+    diff_chars: diff.length,
+    ms: Date.now() - started,
+    judged: !!(result && result.judged),
+    reason: result && !result.judged ? result.reason || null : null,
+    violations: result && Array.isArray(result.violations) ? result.violations.length : 0,
+    uncovered: result && Array.isArray(result.uncovered) ? result.uncovered.length : 0,
+    coverage: result && typeof result.coverage === 'number' ? result.coverage : null,
+    summary: result && result.summary ? String(result.summary).slice(0, 200) : '',
+    shown: notes.length,
+  });
+  return notes;
+}
+
 const RULE_SENTENCE = /\b(NEVER|ALWAYS|HARD RULE|STANDING RULE|must not|must be|do not|don't|gotcha|watch out|check these|before any|make sure)\b/i;
 const GENERIC = new Set([
   'server', 'package', 'index', 'config', 'app', 'main', 'test', 'tests', 'build', 'utils', 'util', 'helper', 'helpers',
@@ -188,6 +303,10 @@ export interface ReviewOptions {
   apiBase: string;
   timeoutMs: number;
   userAgent: string;
+  /** v3.26.0: the project id and its cached intent document, when it has one. */
+  projectId?: string;
+  intent?: { content: string; memory_id: number } | null;
+  intentTimeoutMs?: number;
 }
 
 /**
@@ -288,6 +407,9 @@ export async function reviewWorkingTree(cwd: string, opt: ReviewOptions & { last
   notes.push(...checkVersionDrift(root, files));
   notes.push(...checkDeletions(root, deleted));
   notes.push(...checkDuplicateDefinitions(root, lines));
-  notes.push(...(await memoryLandmines(root, files, opt)));
+  // The two network questions run side by side so the review stays inside
+  // the Stop hook's time budget.
+  const [landmines, intentNotes] = await Promise.all([memoryLandmines(root, files, opt), intentReview(root, files, opt)]);
+  notes.push(...landmines, ...intentNotes);
   return notes;
 }

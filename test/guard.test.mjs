@@ -260,3 +260,65 @@ test('shell adapter denies via BASH_ENV before anything runs', { skip: !haveBash
   const bypass = run('echo bypassed', { COGMEMAI_GUARD_OFF: '1' });
   assert.equal(bypass.status, 0);
 });
+
+// ── Intent (v3.26.0) ────────────────────────────────────────
+import { extractInvariants, intentAsRuleMemory, formatIntentNotes } from '../build/guard.js';
+
+const INTENT_DOC = `# example-app
+
+## Purpose
+A checkout for a small shop. Customers pay by card and get an email receipt.
+
+## Invariants
+- NEVER charge a card before the address is validated.
+- NEVER run \`pkill -u www lsphp\` on the shared host.
+- Every email goes through the queue, never sent inline.
+
+## Decisions
+- Tax is computed after discounts because the accountant said so.
+
+## Out of scope
+- Subscriptions.
+`;
+
+test('invariants are the only section the guard reads', () => {
+  const inv = extractInvariants(INTENT_DOC);
+  assert.ok(inv.includes('NEVER charge a card'));
+  assert.ok(inv.includes('pkill -u www lsphp'));
+  assert.ok(!inv.includes('accountant'), 'decisions are context, not patterns');
+  assert.ok(!inv.includes('Subscriptions'));
+  assert.equal(extractInvariants('# only a title\n\nno sections here'), '');
+  assert.equal(intentAsRuleMemory({ id: 1, content: '## Purpose\nNothing enforceable.' }), null);
+});
+
+test('an intent invariant becomes an enforceable rule', () => {
+  const mem = intentAsRuleMemory({ id: 42, content: INTENT_DOC });
+  assert.ok(mem);
+  const rules = compileMemoryRules([mem]);
+  assert.equal(rules.length, 1, 'only the command-shaped NEVER sentence derives a pattern');
+  assert.equal(rules[0].subject, 'intent');
+  assert.equal(verdict('pkill -u www lsphp', rules), 'deny');
+  assert.equal(verdict('ssh deploy@203.0.113.10 "pkill -u www lsphp"', rules), 'deny');
+  assert.equal(verdict('echo "pkill -u www lsphp"', rules), 'allow', 'quoted data stays silent');
+});
+
+test('a covered change earns silence; conflicts and gaps are said plainly', () => {
+  assert.deepEqual(formatIntentNotes(null), []);
+  assert.deepEqual(formatIntentNotes({ judged: false, reason: 'tier' }), []);
+  assert.deepEqual(formatIntentNotes({ judged: true, summary: 'Adds a receipt email.', covered: ['email receipt'], uncovered: [], violations: [] }), []);
+  const verbose = formatIntentNotes({ judged: true, summary: 'Adds a receipt email.', covered: ['email receipt'] }, true);
+  assert.equal(verbose.length, 1);
+  assert.ok(verbose[0].includes('Your intent covers it'));
+
+  const notes = formatIntentNotes({
+    judged: true,
+    summary: 'Charges the card as soon as the form is submitted.',
+    uncovered: ['Stores the card number for later'],
+    violations: [{ intent: 'NEVER charge a card before the address is validated.', change: 'The charge now happens before validation.' }],
+  });
+  assert.equal(notes.length, 3);
+  assert.ok(notes[0].startsWith('Intent check: Charges the card'));
+  assert.ok(notes[1].startsWith('Conflicts with your intent ("NEVER charge a card'));
+  assert.ok(notes[2].startsWith('Not in your intent yet: Stores the card number'));
+  assert.ok(notes[2].includes('add that to the intent'));
+});

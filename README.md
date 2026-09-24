@@ -18,6 +18,14 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### CogmemAi Intent: You Read the Intent, Not the Code (v3.26.0)
+
+Spec files that live in a repository are per-repo, per-tool, and they rot. v3.26.0 adds one plain-English intent document per project that lives with you instead: what the project is for, what must always hold, what was decided and why, and what is out of scope. Write it with `set_intent`, read it with `get_intent`. Every session loads it right after the rules, every replacement is versioned, and it follows you into every tool that talks to CogmemAi.
+
+Then it does two things a spec file cannot. The sentences under **Invariants** are compiled into the same enforceable patterns as rule memories, so `NEVER run \`pkill -u www lsphp\`` in your intent denies that command before it runs, with no network call. And at the end of every turn the changes are judged against the document on the CogmemAi server and reported in plain English for someone who does not read code: what changed, whether the intent covers it, what conflicts with it, and what the intent does not mention yet. A covered change earns silence. `COGMEMAI_INTENT_VERBOSE=1` shows the summary on every judged turn. Every check is logged to `~/.cogmemai/intent-log.jsonl`, so precision is measured rather than assumed.
+
+The judged check runs on the paid tiers; the free tier still gets the enforced invariants and every deterministic review. See [Intent](#intent) below.
+
 ### CogmemAi Guard: Your Memory Now Stops Your Ai From Repeating Mistakes (v3.24.0)
 
 Memory that only advises is memory your Ai can ignore under pressure. v3.24.0 adds a guard that turns what your project remembers into enforcement.
@@ -246,6 +254,49 @@ When a remembered rule fires, the reason quotes the rule and names it, and the w
 
 **What it is not.** It is not a sandbox and not a substitute for git, backups, or review. A blanket `Bash` entry in `permissions.allow` makes an "ask" verdict inert, which is why the guard denies rather than asks.
 
+## Intent
+
+CogmemAi Intent (v3.26.0) is one plain-English document per project, kept by CogmemAi rather than in the repository. It is the owner's source of truth, written for a reader who may never open the code.
+
+**Write it** with the `set_intent` tool (or ask your assistant to draft it and approve the words). Four sections work well:
+
+```markdown
+# my-shop
+
+## Purpose
+A checkout for a small shop. Customers pay by card and get an email receipt.
+
+## Invariants
+- NEVER charge a card before the address is validated.
+- NEVER run `pkill -u www lsphp` on the shared host.
+- Every email goes through the queue, never sent inline.
+
+## Decisions
+- Tax is computed after discounts because the accountant said so.
+
+## Out of scope
+- Subscriptions.
+```
+
+**Every session loads it** right after the mandatory rules, above the truncation cut, so it is always in front of the assistant. `get_intent` returns the full text; `cogmemai-mcp guard intent` prints the cached copy; every replacement keeps the previous text as a version.
+
+**Invariants are enforced.** The sentences under a heading that reads like Invariants, Rules, Must, Never, or Always are compiled exactly like rule memories: a backticked command after NEVER or MUST NOT becomes a pattern the PreToolUse guard denies, and `GUARD: <regex>` lines work too. No network on that path; the cache is refreshed at session start and by `guard sync`.
+
+**Every turn is checked.** At Stop, the turn's diff (unstaged, staged, and the head of new files, capped at 16,000 characters so it judges within the hook's budget) is sent to the CogmemAi server and judged against the intent there, so the hook itself still never calls a model. The result comes back as a few lines for a person:
+
+```
+CogmemAi Guard reviewed this turn:
+  - Intent check: Charges the card as soon as the form is submitted.
+  - Conflicts with your intent ("NEVER charge a card before the address is validated."): The charge now happens before validation.
+  - Not in your intent yet: Stores the card number for later. Say "add that to the intent" to record it, or ask for it to be reverted.
+```
+
+A change the intent already covers earns silence. Set `COGMEMAI_INTENT_VERBOSE=1` to see the one-line summary on every judged turn instead. Nothing is ever blocked or edited by the review; it reports, and you decide.
+
+**The log.** Every check is appended to `~/.cogmemai/intent-log.jsonl` with the project, the diff size, the time taken, how many conflicts and gaps were found, and what was shown. That is the number behind the feature: how often the code drifts from what you meant, and whether it is falling.
+
+**Tiers.** The judged check runs on the paid tiers, because each one is a model request. The free tier gets the enforced invariants, the context injection, and every deterministic review. Local-only storage mode has no intent document, since the judgment needs the server.
+
 ## Manual Setup
 
 If you prefer to configure manually instead of using `npx cogmemai-mcp setup`:
@@ -365,7 +416,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 35 tools that your Ai assistant uses automatically:
+CogmemAi provides 37 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -403,6 +454,8 @@ CogmemAi provides 35 tools that your Ai assistant uses automatically:
 | `save_rule` | Save a mandatory rule that surfaces in every session — bypasses all scoring and decay |
 | `list_rules` | List all mandatory rules for the current project and/or globally |
 | `delete_rule` | Delete a mandatory rule by ID |
+| `get_intent` | Read the project's Intent document, the owner's plain-English source of truth |
+| `set_intent` | Create or replace the project's Intent document (versioned; invariants are enforced by the guard) |
 | `extract_principles` | Trigger Wisdom Engine to detect factual patterns across memory clusters |
 
 ## SDKs

@@ -53,6 +53,10 @@ export interface StorageBackend {
   // ─── Recycle bin (cloud-backed; optional so local mode can omit) ───
   restoreMemory?(id: number): Promise<unknown>;
   listTrash?(params: Record<string, unknown>): Promise<unknown>;
+
+  // ─── Project Intent (v3.26.0; cloud-backed, the judgment runs server-side) ───
+  getIntent?(params: Record<string, unknown>): Promise<unknown>;
+  setIntent?(body: Record<string, unknown>): Promise<unknown>;
 }
 
 /**

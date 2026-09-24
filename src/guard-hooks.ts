@@ -15,6 +15,7 @@
  *                      near the touched files. Advisory only.
  *   guard sync         Refresh the remembered-rule cache for this project.
  *   guard status       Show what is cached and what the log says.
+ *   guard intent       Print the cached intent document for this project.
  *   guard test <cmd>   Judge a command without running it.
  *   guard log [n]      Show the last n verdicts.
  *   guard install      Add the guard hooks to ~/.claude/settings.json.
@@ -32,11 +33,11 @@
  */
 
 import { execSync } from 'child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { API_BASE, FLAG_DIR, HOOK_FETCH_TIMEOUT_MS, VERSION } from './config.js';
-import { compileMemoryRules, decide, redact, type MemoryRule, type Verdict } from './guard.js';
+import { compileMemoryRules, decide, intentAsRuleMemory, redact, type MemoryRule, type Verdict } from './guard.js';
 import { reviewWorkingTree } from './guard-review.js';
 
 export const GUARD_LOG_PATH = process.env.COGMEMAI_GUARD_LOG || join(FLAG_DIR, 'guard-verdicts.jsonl');
@@ -91,6 +92,85 @@ function safeName(s: string): string {
 
 function cachePath(scope: 'global' | string): string {
   return join(FLAG_DIR, `guard-rules-${scope === 'global' ? 'global' : safeName(scope)}.json`);
+}
+
+// ── Intent cache ──────────────────────────────────────────────
+//
+// The hooks read a local copy of the project's intent document: the
+// PreToolUse guard enforces its invariants with no network call, and the
+// Stop review ships this turn's diff to the server to be judged against it.
+
+const INTENT_CHECK_TIMEOUT_MS = 12000; // the Stop hook is installed with a 25s budget; the landmine recall runs alongside
+
+function intentPath(projectId: string): string {
+  return join(FLAG_DIR, `intent-${safeName(projectId)}.md`);
+}
+
+function intentMetaPath(projectId: string): string {
+  return join(FLAG_DIR, `intent-${safeName(projectId)}.json`);
+}
+
+export interface CachedIntent {
+  content: string;
+  memory_id: number;
+  updated_at: string;
+  project_id: string;
+}
+
+/** The cached intent document for a project, or null when the project has none. */
+export function loadIntent(projectId: string): CachedIntent | null {
+  try {
+    const p = intentPath(projectId);
+    if (!existsSync(p)) return null;
+    const content = readFileSync(p, 'utf-8');
+    if (!content.trim()) return null;
+    let meta: Partial<CachedIntent> = {};
+    try {
+      meta = JSON.parse(readFileSync(intentMetaPath(projectId), 'utf-8'));
+    } catch {
+      /* content without meta is still usable */
+    }
+    return { content, memory_id: Number(meta.memory_id) || 0, updated_at: String(meta.updated_at || ''), project_id: projectId };
+  } catch {
+    return null;
+  }
+}
+
+/** Write the local copy the hooks read, or clear it when content is empty. */
+export function writeIntentCache(projectId: string, content: string, memoryId = 0, updatedAt = ''): void {
+  try {
+    mkdirSync(FLAG_DIR, { recursive: true });
+    if (!content || !content.trim()) {
+      for (const p of [intentPath(projectId), intentMetaPath(projectId)]) if (existsSync(p)) unlinkSync(p);
+      return;
+    }
+    writeFileSync(intentPath(projectId), content);
+    writeFileSync(
+      intentMetaPath(projectId),
+      JSON.stringify({ memory_id: memoryId, updated_at: updatedAt, project_id: projectId, cached_at: new Date().toISOString() })
+    );
+  } catch (err) {
+    logError('intent-cache', err);
+  }
+}
+
+async function fetchIntent(
+  apiKey: string,
+  projectId: string
+): Promise<{ exists: boolean; content?: string; memory_id?: number; updated_at?: string }> {
+  const qs = new URLSearchParams({ project_id: projectId }).toString();
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), HOOK_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/cogmemai/intent?${qs}`, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': `cogmemai-mcp/${VERSION}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} from /cogmemai/intent`);
+    return (await res.json()) as { exists: boolean; content?: string; memory_id?: number; updated_at?: string };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 function logError(where: string, err: unknown): void {
@@ -157,20 +237,45 @@ async function fetchRules(apiKey: string, params: Record<string, string>): Promi
  * apply everywhere, and this project's own. Best effort; on any failure the
  * previous cache stays in place and the static rules keep working.
  */
-export async function syncGuardRules(apiKey: string, projectId: string): Promise<{ global: number; project: number } | null> {
+export async function syncGuardRules(
+  apiKey: string,
+  projectId: string
+): Promise<{ global: number; project: number; intent: boolean } | null> {
   try {
     mkdirSync(FLAG_DIR, { recursive: true });
     const globalMems = await fetchRules(apiKey, { scope: 'global' });
     const projectMems = (await fetchRules(apiKey, { project_id: projectId })).filter(
       (m) => m.scope !== 'global'
     );
+    // The intent document's invariants are enforced like any remembered
+    // rule. A failure fetching it must not cost the rules their refresh, and
+    // a network failure keeps the previous copy; only "no intent" clears it.
+    let hasIntent = false;
+    try {
+      const intent = await fetchIntent(apiKey, projectId);
+      if (intent.exists && typeof intent.content === 'string' && intent.content.trim()) {
+        writeIntentCache(projectId, intent.content, Number(intent.memory_id) || 0, String(intent.updated_at || ''));
+        hasIntent = true;
+      } else {
+        writeIntentCache(projectId, '');
+      }
+    } catch (err) {
+      logError('intent-sync', err);
+      hasIntent = loadIntent(projectId) !== null;
+    }
+    const cached = loadIntent(projectId);
+    const intentRule = cached ? intentAsRuleMemory({ id: cached.memory_id, content: cached.content }) : null;
     const write = (scope: string, mems: Array<Record<string, unknown>>): number => {
       const rules = compileMemoryRules(mems);
       const cache: RuleCache = { synced_at: new Date().toISOString(), scope, version: VERSION, rules };
       writeFileSync(cachePath(scope), JSON.stringify(cache, null, 2));
       return rules.length;
     };
-    return { global: write('global', globalMems), project: write(projectId, projectMems) };
+    return {
+      global: write('global', globalMems),
+      project: write(projectId, intentRule ? [...projectMems, intentRule] : projectMems),
+      intent: hasIntent,
+    };
   } catch (err) {
     logError('guard-sync', err);
     return null;
@@ -251,11 +356,15 @@ export async function runHookGuardReview(): Promise<void> {
     } catch {
       /* first review this session */
     }
+    const projectId = projectIdFor(cwd);
     const notes = await reviewWorkingTree(cwd, {
       apiKey: resolveKey(),
       apiBase: API_BASE,
       timeoutMs: HOOK_FETCH_TIMEOUT_MS,
       userAgent: `cogmemai-mcp/${VERSION}`,
+      projectId,
+      intent: loadIntent(projectId),
+      intentTimeoutMs: INTENT_CHECK_TIMEOUT_MS,
       lastFingerprint,
       onFingerprint: (fp) => {
         try {
@@ -269,7 +378,7 @@ export async function runHookGuardReview(): Promise<void> {
     if (notes.length === 0) return; // a clean turn earns silence
     const body =
       'CogmemAi Guard reviewed this turn:\n' +
-      notes.slice(0, 5).map((n) => `  - ${n}`).join('\n') +
+      notes.slice(0, 7).map((n) => `  - ${n}`).join('\n') +
       '\n  (Advisory only. Nothing was changed or blocked.)';
     console.log(JSON.stringify({ systemMessage: body, suppressOutput: true }));
   } catch (err) {
@@ -306,7 +415,7 @@ export function installGuardHooks(): { success: boolean; added: string[]; error?
     settings.hooks.Stop = settings.hooks.Stop || [];
     if (!has(settings.hooks.Stop, 'cogmemai-mcp hook guard-review')) {
       settings.hooks.Stop.push({
-        hooks: [{ type: 'command', command: 'cogmemai-mcp hook guard-review', timeout: 15 }],
+        hooks: [{ type: 'command', command: 'cogmemai-mcp hook guard-review', timeout: 25 }],
       });
       added.push('Stop');
     }
@@ -488,6 +597,18 @@ export async function runGuardCli(args: string[]): Promise<void> {
     return;
   }
 
+  if (sub === 'intent') {
+    const projectId = projectIdFor(cwd);
+    const cached = loadIntent(projectId);
+    if (!cached) {
+      console.log(`No intent document cached for ${projectId}. Write one with the set_intent tool, then run: cogmemai-mcp guard sync`);
+      return;
+    }
+    console.log(`Intent for ${projectId} (memory #${cached.memory_id}, updated ${cached.updated_at || 'unknown'}):\n`);
+    console.log(cached.content);
+    return;
+  }
+
   if (sub === 'sync') {
     const key = resolveKey();
     if (!key) {
@@ -500,7 +621,7 @@ export async function runGuardCli(args: string[]): Promise<void> {
       console.error('Sync failed. See ~/.cogmemai/errors.log');
       process.exit(1);
     }
-    console.log(`Guard rules synced for ${projectId}: ${r.global} global, ${r.project} project.`);
+    console.log(`Guard rules synced for ${projectId}: ${r.global} global, ${r.project} project. Intent document: ${r.intent ? 'cached' : 'none'}.`);
     return;
   }
 

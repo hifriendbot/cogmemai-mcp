@@ -1,5 +1,5 @@
 /**
- * CogmemAi MCP tool definitions — 29 tools for developer memory.
+ * CogmemAi MCP tool definitions: developer memory, rules, guard, and intent.
  * Uses StorageBackend abstraction for local/cloud/hybrid modes.
  */
 
@@ -10,6 +10,7 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 import type { StorageBackend } from './storage.js';
 import { detectProjectId } from './project.js';
+import { writeIntentCache } from './guard-hooks.js';
 import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
 
@@ -29,6 +30,7 @@ const MEMORY_TYPES = [
   'skill',
   'rule',
   'principle',
+  'intent',
 ] as const;
 
 // Remote mode: skip filesystem operations (git, topic cache, snapshots)
@@ -417,6 +419,89 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (scope !== 'global') body.project_id = projectId;
         const result = await storage.listMemories(body);
         return wrapResult(result);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1f. get_intent / set_intent (v3.26.0) ───────────────
+  // The intent document is the owner's plain-English source of truth for a
+  // project: purpose, invariants, decisions, out of scope. It is loaded into
+  // every session, its invariants are enforced by the guard, and each turn's
+  // changes are checked against it. Cloud-backed: the judgment runs server-side.
+
+  server.tool(
+    'get_intent',
+    "Read the project's Intent document: the owner's plain-English source of truth (what the project is for, what must always hold, what was decided and why, what is out of scope). It is loaded automatically at session start; call this when you need the full text, or to confirm one exists before proposing a change to it.",
+    {
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
+    },
+    async ({ project_id }) => {
+      try {
+        if (!storage.getIntent) {
+          return wrapError(new Error(`get_intent needs cloud or hybrid mode (current: ${storage.mode}). The intent check runs on the CogmemAi server.`));
+        }
+        const projectId = project_id || detectProjectId();
+        const result = (await storage.getIntent({ project_id: projectId })) as { exists?: boolean };
+        if (!result || !result.exists) {
+          return wrapResult(
+            {
+              exists: false,
+              project_id: projectId,
+              hint: 'No intent document yet. Ask the owner what this project is for, what must always hold, what has been decided, and what is out of scope, then record it with set_intent.',
+            },
+            true
+          );
+        }
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  server.tool(
+    'set_intent',
+    "Create or replace the project's Intent document in the owner's own words: a short markdown document with the sections Purpose, Invariants (NEVER and ALWAYS sentences the guard will enforce), Decisions (with the why), and Out of scope. Every session loads it, the end-of-turn review checks changes against it, and every replacement is versioned. Use it when the owner describes what the project is for, or agrees to record a change of intent. Ask before replacing an existing document, and pass changed_by \"agent\" when you drafted the text.",
+    {
+      content: z
+        .string()
+        .min(20)
+        .max(8000)
+        .describe('The full intent document (markdown, at most 8000 characters). This replaces the previous version; the previous text is kept as a version.'),
+      changed_by: z
+        .enum(['user', 'agent'])
+        .default('user')
+        .describe('user = the owner wrote or approved these exact words; agent = the assistant drafted them'),
+      project_id: z
+        .string()
+        .max(200)
+        .optional()
+        .describe('Project identifier override (auto-detected from CLAUDE_PROJECT_DIR or git remote if omitted)'),
+    },
+    async ({ content, changed_by, project_id }) => {
+      try {
+        if (!storage.setIntent) {
+          return wrapError(new Error(`set_intent needs cloud or hybrid mode (current: ${storage.mode}).`));
+        }
+        const projectId = project_id || detectProjectId();
+        const result = (await storage.setIntent({ project_id: projectId, content, changed_by })) as {
+          memory_id?: number;
+          updated_at?: string;
+          error?: string;
+        };
+        if (result && !result.error && !remoteMode) {
+          // The hooks read a local copy; refresh it now so the guard enforces
+          // the new invariants this session rather than the next.
+          writeIntentCache(projectId, content, Number(result.memory_id) || 0, String(result.updated_at || ''));
+        }
+        resetDebt();
+        return wrapResult(result, true);
       } catch (error) {
         return wrapError(error);
       }
