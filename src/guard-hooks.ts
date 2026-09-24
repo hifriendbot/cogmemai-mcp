@@ -16,6 +16,14 @@
  *   guard sync         Refresh the remembered-rule cache for this project.
  *   guard status       Show what is cached and what the log says.
  *   guard intent       Print the cached intent document for this project.
+ *   guard intent-status
+ *                      The scoreboard: availability, latency, how often it
+ *                      spoke, precision of graded notes, closed loops.
+ *   guard intent-log [n]
+ *                      The last n notes shown, numbered, with their grades.
+ *   guard intent-grade [#] right|wrong [why]
+ *                      Grade a note. Precision is the number that decides
+ *                      whether the review earns its place.
  *   guard test <cmd>   Judge a command without running it.
  *   guard log [n]      Show the last n verdicts.
  *   guard install      Add the guard hooks to ~/.claude/settings.json.
@@ -37,8 +45,18 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, stat
 import { homedir } from 'os';
 import { join } from 'path';
 import { API_BASE, FLAG_DIR, HOOK_FETCH_TIMEOUT_MS, VERSION } from './config.js';
-import { compileMemoryRules, decide, intentAsRuleMemory, redact, type MemoryRule, type Verdict } from './guard.js';
-import { reviewWorkingTree } from './guard-review.js';
+import {
+  compileMemoryRules,
+  decide,
+  formatIntentStatus,
+  intentAsRuleMemory,
+  pickNoteForGrade,
+  redact,
+  summarizeIntentLog,
+  type MemoryRule,
+  type Verdict,
+} from './guard.js';
+import { logIntent, readIntentLog, reviewWorkingTree } from './guard-review.js';
 
 export const GUARD_LOG_PATH = process.env.COGMEMAI_GUARD_LOG || join(FLAG_DIR, 'guard-verdicts.jsonl');
 const GUARD_LOG_MAX_BYTES = 2 * 1024 * 1024;
@@ -594,6 +612,60 @@ export async function runGuardCli(args: string[]): Promise<void> {
     const touched = removeShellAdapter();
     console.log(touched.length ? `Removed from: ${touched.join(', ')}` : 'Shell adapter was not installed in any rc file.');
     console.log('BASH_ENV cleared for new processes. Open shells keep it until restarted.');
+    return;
+  }
+
+  if (sub === 'intent-status') {
+    for (const line of formatIntentStatus(summarizeIntentLog(readIntentLog()))) console.log(line);
+    return;
+  }
+
+  if (sub === 'intent-log') {
+    const n = Math.max(1, Math.min(50, parseInt(args[1] || '10', 10) || 10));
+    const entries = readIntentLog();
+    const grades = new Map<string, string>();
+    for (const e of entries) if (e.type === 'grade' && e.for && e.grade) grades.set(e.for, e.grade);
+    const shown = entries.filter((e) => !e.type && (e.shown || 0) > 0).slice(-n).reverse();
+    if (shown.length === 0) {
+      console.log('No intent notes shown yet.');
+      return;
+    }
+    shown.forEach((e, i) => {
+      const g = grades.get(e.ts);
+      console.log(`#${i + 1}  ${e.ts}  ${e.project || ''}  ${g ? `[${g}]` : '[ungraded]'}`);
+      for (const line of e.notes || []) console.log(`     - ${line}`);
+    });
+    console.log('\nGrade one: cogmemai-mcp guard intent-grade [#] right|wrong [why]');
+    return;
+  }
+
+  if (sub === 'intent-grade') {
+    let rest = args.slice(1);
+    let index = 1;
+    if (rest.length && /^#?\d+$/.test(rest[0])) {
+      index = parseInt(rest[0].replace('#', ''), 10) || 1;
+      rest = rest.slice(1);
+    }
+    const grade = (rest[0] || '').toLowerCase();
+    if (grade !== 'right' && grade !== 'wrong') {
+      console.log('Usage: cogmemai-mcp guard intent-grade [#] right|wrong [why]   (# from `guard intent-log`, default 1 = latest)');
+      return;
+    }
+    const target = pickNoteForGrade(readIntentLog(), index);
+    if (!target) {
+      console.log('No shown intent note to grade at that position.');
+      return;
+    }
+    logIntent({
+      ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      type: 'grade',
+      for: target.ts,
+      project: target.project || '',
+      grade,
+      note: rest.slice(1).join(' ').slice(0, 300),
+    });
+    console.log(`Graded ${grade}: ${target.ts} ${target.project || ''}`);
+    for (const line of target.notes || []) console.log(`  - ${line}`);
     return;
   }
 

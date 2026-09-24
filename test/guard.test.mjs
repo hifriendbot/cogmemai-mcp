@@ -322,3 +322,46 @@ test('a covered change earns silence; conflicts and gaps are said plainly', () =
   assert.ok(notes[2].startsWith('Not in your intent yet: Stores the card number'));
   assert.ok(notes[2].includes('add that to the intent'));
 });
+
+// ── Intent scoreboard (v3.27.0) ─────────────────────────────
+import { summarizeIntentLog, formatIntentStatus, pickNoteForGrade } from '../build/guard.js';
+
+const LOG = [
+  { ts: '2026-09-24T18:00:00Z', project: 'p', judged: false, reason: 'timeout', shown: 0, ms: 9000 },
+  { ts: '2026-09-24T18:05:00Z', project: 'p', judged: true, reason: null, violations: 0, uncovered: 0, coverage: 80, shown: 0, ms: 4000 },
+  { ts: '2026-09-24T18:10:00Z', project: 'p', judged: true, reason: null, violations: 1, uncovered: 2, coverage: 85, shown: 3, ms: 6000, notes: ['Intent check: x', 'Conflicts', 'Not in your intent yet'] },
+  { ts: '2026-09-24T18:20:00Z', type: 'intent_set', project: 'p', chars: 900, changed_by: 'agent' },
+  { ts: '2026-09-24T18:30:00Z', project: 'p', judged: true, reason: null, violations: 0, uncovered: 1, coverage: 92, shown: 2, ms: 8000, notes: ['Intent check: y', 'Not in your intent yet'] },
+  { ts: '2026-09-24T18:31:00Z', type: 'grade', for: '2026-09-24T18:10:00Z', project: 'p', grade: 'right' },
+  { ts: '2026-09-24T18:32:00Z', type: 'grade', for: '2026-09-24T18:30:00Z', project: 'p', grade: 'wrong', note: 'that was covered' },
+  { ts: '2026-09-24T18:33:00Z', type: 'grade', for: '2026-09-24T18:30:00Z', project: 'p', grade: 'right', note: 'on reflection' },
+];
+
+test('the scoreboard counts what decides the feature', () => {
+  const s = summarizeIntentLog(LOG);
+  assert.equal(s.attempted, 4);
+  assert.equal(s.judged, 3);
+  assert.equal(s.failures.timeout, 1);
+  assert.equal(s.spoke, 2);
+  assert.equal(s.graded, 2, 'the last grade for a note wins, so two notes graded');
+  assert.equal(s.right, 2);
+  assert.equal(s.wrong, 0);
+  assert.equal(s.precision, 1);
+  assert.equal(s.ungraded, 0);
+  assert.equal(s.intentSets, 1);
+  assert.equal(s.loopClosed, 1, 'the 18:10 gap note was followed by an update within the hour; the 18:30 one was not');
+  assert.deepEqual(s.coverage.p, { first: 80, last: 92 });
+  assert.equal(s.p50, 6000);
+  const text = formatIntentStatus(s).join('\n');
+  assert.ok(text.includes('availability 75%'));
+  assert.ok(text.includes('2 right, 0 wrong'));
+  assert.ok(text.includes('p 80% -> 92%'));
+  assert.ok(formatIntentStatus(summarizeIntentLog([]))[0].startsWith('No intent checks logged yet'));
+});
+
+test('grading targets the nth most recent shown note', () => {
+  assert.equal(pickNoteForGrade(LOG, 1).ts, '2026-09-24T18:30:00Z');
+  assert.equal(pickNoteForGrade(LOG, 2).ts, '2026-09-24T18:10:00Z');
+  assert.equal(pickNoteForGrade(LOG, 3), null);
+  assert.equal(pickNoteForGrade([], 1), null);
+});

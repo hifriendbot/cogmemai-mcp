@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import type { StorageBackend } from './storage.js';
 import { detectProjectId } from './project.js';
 import { writeIntentCache } from './guard-hooks.js';
+import { logIntent } from './guard-review.js';
 import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
 
@@ -499,6 +500,14 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           // The hooks read a local copy; refresh it now so the guard enforces
           // the new invariants this session rather than the next.
           writeIntentCache(projectId, content, Number(result.memory_id) || 0, String(result.updated_at || ''));
+          // Recorded so the scoreboard can tell whether a gap note led to an update.
+          logIntent({
+            ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+            type: 'intent_set',
+            project: projectId,
+            chars: content.length,
+            changed_by,
+          });
         }
         resetDebt();
         return wrapResult(result, true);

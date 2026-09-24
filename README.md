@@ -293,7 +293,15 @@ CogmemAi Guard reviewed this turn:
 
 A change the intent already covers earns silence. Set `COGMEMAI_INTENT_VERBOSE=1` to see the one-line summary on every judged turn instead. Nothing is ever blocked or edited by the review; it reports, and you decide.
 
-**The log.** Every check is appended to `~/.cogmemai/intent-log.jsonl` with the project, the diff size, the time taken, how many conflicts and gaps were found, and what was shown. That is the number behind the feature: how often the code drifts from what you meant, and whether it is falling.
+**The scoreboard (v3.27.0).** Every check is appended to `~/.cogmemai/intent-log.jsonl` with the project, the diff size, the time taken, how many conflicts and gaps were found, and the exact lines shown. Three commands turn that into a verdict on the feature itself:
+
+```
+cogmemai-mcp guard intent-status            availability, latency, how often it spoke, precision, closed loops
+cogmemai-mcp guard intent-log [n]           the last n notes, numbered, with their grades
+cogmemai-mcp guard intent-grade [#] right|wrong [why]   grade a note (default: the latest)
+```
+
+Precision, right divided by graded, is the number that decides whether the review earns its place; the target is nine of ten. A "closed loop" is a gap note followed within the hour by an intent update in the same project, which is the owner saying "add that to the intent" and the feature doing its job.
 
 **Tiers.** The judged check runs on the paid tiers, because each one is a model request. The free tier gets the enforced invariants, the context injection, and every deterministic review. Local-only storage mode has no intent document, since the judgment needs the server.
 

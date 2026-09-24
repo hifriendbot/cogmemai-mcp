@@ -15,7 +15,7 @@ import { execSync } from 'child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { basename, extname, join } from 'path';
 import { FLAG_DIR } from './config.js';
-import { formatIntentNotes, type IntentCheckResult } from './guard.js';
+import { formatIntentNotes, type IntentCheckResult, type IntentLogEntry } from './guard.js';
 
 const GIT_TIMEOUT = 8000;
 const MAX_DIFF_BYTES = 400_000;
@@ -213,12 +213,35 @@ function turnDiff(root: string): string {
   return all.length > INTENT_DIFF_MAX_CHARS ? all.slice(0, INTENT_DIFF_MAX_CHARS) + '\n[diff truncated]' : all;
 }
 
-function logIntent(entry: Record<string, unknown>): void {
+export const INTENT_LOG_PATH = join(FLAG_DIR, 'intent-log.jsonl');
+
+/** Append one line to the intent log. Never throws. */
+export function logIntent(entry: Record<string, unknown>): void {
   try {
     mkdirSync(FLAG_DIR, { recursive: true });
-    appendFileSync(join(FLAG_DIR, 'intent-log.jsonl'), JSON.stringify(entry) + '\n');
+    appendFileSync(INTENT_LOG_PATH, JSON.stringify(entry) + '\n');
   } catch {
     /* logging never affects the review */
+  }
+}
+
+/** Every parseable line of the intent log, oldest first. */
+export function readIntentLog(): IntentLogEntry[] {
+  try {
+    if (!existsSync(INTENT_LOG_PATH)) return [];
+    const out: IntentLogEntry[] = [];
+    for (const line of readFileSync(INTENT_LOG_PATH, 'utf-8').split('\n')) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        out.push(JSON.parse(t) as IntentLogEntry);
+      } catch {
+        /* skip a torn line */
+      }
+    }
+    return out;
+  } catch {
+    return [];
   }
 }
 
@@ -287,6 +310,7 @@ async function intentReview(root: string, files: string[], opt: ReviewOptions): 
     coverage: result && typeof result.coverage === 'number' ? result.coverage : null,
     summary: result && result.summary ? String(result.summary).slice(0, 200) : '',
     shown: notes.length,
+    notes: notes.map((n) => n.slice(0, 220)),
   });
   return notes;
 }

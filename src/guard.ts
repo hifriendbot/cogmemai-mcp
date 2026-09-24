@@ -466,3 +466,139 @@ export function formatIntentNotes(r: IntentCheckResult | null | undefined, verbo
   }
   return notes;
 }
+
+
+// ── Intent scoreboard ─────────────────────────────────────────
+//
+// The log answers the only question that decides whether the review
+// survives: when it speaks, is it right? Availability, latency and noise
+// come free from the entries; precision needs a person to grade a note.
+
+export interface IntentLogEntry {
+  ts: string;
+  type?: string; // undefined = a check; 'grade' = a grade; 'intent_set' = the document was written
+  project?: string;
+  judged?: boolean;
+  reason?: string | null;
+  violations?: number;
+  uncovered?: number;
+  coverage?: number | null;
+  shown?: number;
+  ms?: number;
+  notes?: string[];
+  grade?: 'right' | 'wrong';
+  for?: string; // ts of the check a grade refers to
+  note?: string;
+  changed_by?: string;
+}
+
+export interface IntentStats {
+  attempted: number;
+  judged: number;
+  availability: number | null;
+  failures: Record<string, number>;
+  spoke: number;
+  spokeRate: number | null;
+  p50: number | null;
+  p95: number | null;
+  graded: number;
+  right: number;
+  wrong: number;
+  precision: number | null;
+  ungraded: number;
+  intentSets: number;
+  loopClosed: number;
+  coverage: Record<string, { first: number; last: number }>;
+}
+
+function percentile(sorted: number[], p: number): number | null {
+  if (sorted.length === 0) return null;
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[i];
+}
+
+export function summarizeIntentLog(entries: IntentLogEntry[]): IntentStats {
+  const checks = entries.filter((e) => e && !e.type && typeof e.judged === 'boolean');
+  const grades = entries.filter((e) => e && e.type === 'grade' && (e.grade === 'right' || e.grade === 'wrong'));
+  const sets = entries.filter((e) => e && e.type === 'intent_set');
+  const judged = checks.filter((e) => e.judged);
+  const failures: Record<string, number> = {};
+  for (const e of checks) {
+    if (!e.judged) failures[e.reason || 'unknown'] = (failures[e.reason || 'unknown'] || 0) + 1;
+  }
+  const spoke = checks.filter((e) => (e.shown || 0) > 0);
+  const times = judged.map((e) => Number(e.ms) || 0).filter((n) => n > 0).sort((a, b) => a - b);
+  const gradedFor = new Map<string, 'right' | 'wrong'>();
+  for (const g of grades) if (g.for) gradedFor.set(g.for, g.grade as 'right' | 'wrong'); // last grade wins
+  let right = 0;
+  let wrong = 0;
+  for (const v of gradedFor.values()) v === 'right' ? right++ : wrong++;
+  const ungraded = spoke.filter((e) => !gradedFor.has(e.ts)).length;
+  // The loop closes when a gap note is followed, within an hour and in the
+  // same project, by the intent document being rewritten.
+  let loopClosed = 0;
+  for (const e of spoke) {
+    if ((e.uncovered || 0) === 0) continue;
+    const t = Date.parse(e.ts);
+    if (sets.some((s) => s.project === e.project && Date.parse(s.ts) >= t && Date.parse(s.ts) - t <= 3600_000)) loopClosed++;
+  }
+  const coverage: Record<string, { first: number; last: number }> = {};
+  for (const e of judged) {
+    if (typeof e.coverage !== 'number' || !e.project) continue;
+    if (!coverage[e.project]) coverage[e.project] = { first: e.coverage, last: e.coverage };
+    else coverage[e.project].last = e.coverage;
+  }
+  return {
+    attempted: checks.length,
+    judged: judged.length,
+    availability: checks.length ? judged.length / checks.length : null,
+    failures,
+    spoke: spoke.length,
+    spokeRate: judged.length ? spoke.length / judged.length : null,
+    p50: percentile(times, 50),
+    p95: percentile(times, 95),
+    graded: right + wrong,
+    right,
+    wrong,
+    precision: right + wrong ? right / (right + wrong) : null,
+    ungraded,
+    intentSets: sets.length,
+    loopClosed,
+    coverage,
+  };
+}
+
+const pct = (n: number | null): string => (n === null ? 'n/a' : `${Math.round(n * 100)}%`);
+
+export function formatIntentStatus(s: IntentStats): string[] {
+  const lines: string[] = [];
+  if (s.attempted === 0) {
+    lines.push('No intent checks logged yet. They start once a project has an intent document and a turn changes files in a git repository.');
+    return lines;
+  }
+  const fails = Object.entries(s.failures)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${v}`)
+    .join(', ');
+  lines.push(`Checks: ${s.attempted} attempted, ${s.judged} judged, availability ${pct(s.availability)}${fails ? ` (failures: ${fails})` : ''}.`);
+  lines.push(`Latency: median ${s.p50 === null ? 'n/a' : `${(s.p50 / 1000).toFixed(1)}s`}, p95 ${s.p95 === null ? 'n/a' : `${(s.p95 / 1000).toFixed(1)}s`}, budget 12s.`);
+  lines.push(`Spoke on ${s.spoke} of ${s.judged} judged turns (${pct(s.spokeRate)}); silence is the correct output for a covered change.`);
+  if (s.graded === 0) {
+    lines.push(`Precision: not measured yet. ${s.ungraded} note(s) waiting for a grade: cogmemai-mcp guard intent-grade right|wrong`);
+  } else {
+    lines.push(`Precision: ${s.right} right, ${s.wrong} wrong of ${s.graded} graded (${pct(s.precision)}), target 90%. ${s.ungraded} note(s) still ungraded.`);
+  }
+  lines.push(`Loop closed: ${s.loopClosed} gap note(s) followed by an intent update within an hour; ${s.intentSets} intent update(s) in all.`);
+  const cov = Object.entries(s.coverage);
+  if (cov.length) {
+    lines.push('Coverage: ' + cov.map(([p, c]) => `${p} ${c.first}% -> ${c.last}%`).join('; '));
+  }
+  return lines;
+}
+
+/** The nth most recent check that showed a note (1 = latest), or null. */
+export function pickNoteForGrade(entries: IntentLogEntry[], index = 1): IntentLogEntry | null {
+  const spoke = entries.filter((e) => e && !e.type && (e.shown || 0) > 0);
+  const i = spoke.length - index;
+  return i >= 0 && i < spoke.length ? spoke[i] : null;
+}
