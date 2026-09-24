@@ -591,7 +591,9 @@ export function formatIntentStatus(s: IntentStats): string[] {
   lines.push(`Loop closed: ${s.loopClosed} gap note(s) followed by an intent update within an hour; ${s.intentSets} intent update(s) in all.`);
   const cov = Object.entries(s.coverage);
   if (cov.length) {
-    lines.push('Coverage: ' + cov.map(([p, c]) => `${p} ${c.first}% -> ${c.last}%`).join('; '));
+    // The judge only sees one diff at a time, so this is its estimate for the
+    // last change it read, not a score for the whole project.
+    lines.push("Judge's coverage estimate on the last diff: " + cov.map(([p, c]) => `${p} ${c.last}%`).join('; ') + ' (per diff, not a project score).');
   }
   return lines;
 }

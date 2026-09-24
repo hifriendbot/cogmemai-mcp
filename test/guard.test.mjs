@@ -355,7 +355,8 @@ test('the scoreboard counts what decides the feature', () => {
   const text = formatIntentStatus(s).join('\n');
   assert.ok(text.includes('availability 75%'));
   assert.ok(text.includes('2 right, 0 wrong'));
-  assert.ok(text.includes('p 80% -> 92%'));
+  assert.ok(text.includes('p 92%'));
+  assert.ok(text.includes('per diff, not a project score'));
   assert.ok(formatIntentStatus(summarizeIntentLog([]))[0].startsWith('No intent checks logged yet'));
 });
 
