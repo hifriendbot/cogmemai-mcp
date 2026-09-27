@@ -321,6 +321,12 @@ Rules bypass all scoring, decay, and filtering. They appear first in get_project
 - **delete_rule** — remove a rule by ID
 When a user says something is a hard requirement, an absolute rule, or a "never/always" directive, save it as a rule, not a memory.
 
+## Guard and Review (any action, any work)
+Rules and the project intent are enforced, not only recalled. In a coding tool the hooks do this automatically for shell commands and code changes. For everything else:
+- **guard_check** — call it BEFORE an action that is hard to undo or that a rule might cover: sending a message or email, spending money, changing a live system, deleting data, making a commitment on the user's behalf. Pass the action in plain words or as the exact command or message. Obey a deny; on ask, confirm with the user first; allow means no remembered rule applies.
+- **review_work** — call it AFTER finishing a task that is not a code change (a reply drafted, a document written, a plan made, a conversation handled). Pass what was done; it is reviewed against the project intent (or an intent you pass inline) and reports violations and gaps in the user's own words. Fix violations before reporting the work as done.
+Both fail open: an error never blocks you, it is reported as judged: false.
+
 ## Tool Selection Guide
 | Goal | Tool |
 |------|------|
@@ -328,6 +334,8 @@ When a user says something is a hard requirement, an absolute rule, or a "never/
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
 | Save an absolute rule | save_rule |
+| Check an action against the rules before doing it | guard_check |
+| Review finished work against the intent | review_work |
 | List/manage rules | list_rules / delete_rule |
 | Find a specific memory | recall_memories |
 | Browse/filter memories | list_memories |
@@ -371,6 +379,8 @@ ${CORE_INSTRUCTIONS}
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
 | Save an absolute rule | save_rule |
+| Check an action against the rules before doing it | guard_check |
+| Review finished work against the intent | review_work |
 | List/manage rules | list_rules / delete_rule |
 | Find a specific memory | recall_memories (keyword search) |
 | Browse/filter memories | list_memories |

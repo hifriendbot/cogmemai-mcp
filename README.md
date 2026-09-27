@@ -263,6 +263,8 @@ When a remembered rule fires, the reason quotes the rule and names it, and the w
 
 **What it is not.** It is not a sandbox and not a substitute for git, backups, or review. A blanket `Bash` entry in `permissions.allow` makes an "ask" verdict inert, which is why the guard denies rather than asks.
 
+**For every other Ai (v3.28.0).** Hooks are how a coding tool asks. Anything else asks with one call: the `guard_check` tool (or `POST /cogmemai/guard-check`, or `guardCheck` in the SDKs) takes a proposed action in plain words or as the exact command or message, plus an optional `kind` (command, action, message, other) and `context`, and answers `allow`, `ask` or `deny` with the rule that applies. Two passes: a literal pass on every tier (a fragment a rule quotes that appears verbatim in the action), and a judged pass on the paid tiers against every rule memory and the NEVER and MUST lines of the project intent. The stricter verdict wins, and it fails open: an error is an allow marked `judged: false`. A support assistant about to send a message, an agent about to spend, a robot about to move, all judged by the same words you saved once.
+
 ## Intent
 
 CogmemAi Intent (v3.26.0) is one plain-English document per project, kept by CogmemAi rather than in the repository. It is the owner's source of truth, written for a reader who may never open the code.
@@ -311,6 +313,8 @@ cogmemai-mcp guard intent-grade [#] right|wrong [why]   grade a note (default: t
 ```
 
 Precision, right divided by graded, is the number that decides whether the review earns its place; the target is nine of ten. A "closed loop" is a gap note followed within the hour by an intent update in the same project, which is the owner saying "add that to the intent" and the feature doing its job.
+
+**Any work, not only diffs (v3.28.0).** The `review_work` tool (or `POST /cogmemai/intent-check` with a `work` field, or `reviewWork` in the SDKs) reviews a description, an output, a message or a whole transcript against the intent, with the same result shape: summary, covered, uncovered, violations, coverage. Pass `intent` inline when the project has no stored document, for an assistant judging one conversation or a robot checking one task.
 
 **Tiers.** The judged check runs on the paid tiers, because each one is a model request. The free tier gets the enforced invariants, the context injection, and every deterministic review. Local-only storage mode has no intent document, since the judgment needs the server.
 
@@ -473,6 +477,8 @@ CogmemAi provides 41 tools that your Ai assistant uses automatically:
 | `delete_rule` | Delete a mandatory rule by ID |
 | `get_intent` | Read the project's Intent document, the owner's plain-English source of truth |
 | `set_intent` | Create or replace the project's Intent document (versioned; invariants are enforced by the guard) |
+| `guard_check` | Ask before acting: allow, ask or deny for any proposed action, against remembered rules and the intent |
+| `review_work` | Review finished work (description, output, message or transcript) against the intent |
 | `extract_principles` | Trigger Wisdom Engine to detect factual patterns across memory clusters |
 
 ## SDKs
