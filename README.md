@@ -6,9 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Quantum Safe](https://img.shields.io/badge/🛡%EF%B8%8F_Quantum-Safe-02ffba?style=flat&labelColor=1a1a2e)](https://hifriendbot.com/developer/)
 
-# CogmemAi — Cognitive Memory for Any Ai System
+# CogmemAi: A Thinking, Live Memory for Everything Ai
 
-**Autonomous robots. Self-driving vehicles. Defense systems. Coding assistants. Any Ai system that needs to remember.**
+**It remembers what matters, enforces the rules you set before anything happens, and checks what your Ai did against what you asked. For assistants, agents, robots, vehicles and code.**
 
 <p align="center">
   <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
@@ -17,6 +17,15 @@
 CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams — and captures knowledge autonomously, even when your Ai forgets to save. **95.10% accuracy on LongMemEval — top published score on the field's hardest long-term memory benchmark.** 91% on LoCoMo, above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays. Not just one score on a test — the most complete Ai memory system available.
 
 ## What's New in v3
+
+### Guard and Review for Everything, Not Only Code (v3.28.0)
+
+Until now the guard judged shell commands and the intent review judged code diffs, because those were the hooks a coding tool gave us. v3.28.0 opens both to any Ai through two tools and two REST endpoints:
+
+- `guard_check`: "may I do this?" Any action (a message about to be sent, a purchase, a change, a command) is judged against the rules this person has asked their Ai to keep, plus the NEVER and MUST lines of the project intent. A literal check runs on every tier; the judged check on the paid tiers. Returns allow, ask or deny with the rule that applies, and fails open.
+- `review_work`: "did I do what was asked?" Pass a description, output, message or transcript of what was done and it is reviewed against the intent document, or against an intent passed inline. Same plain-English result as the code review: summary, covered, uncovered, violations, coverage.
+
+A support assistant, a companion, a robot's task planner and a coding agent now share one memory that shapes what any model does: it remembers, it enforces, it reviews. The same calls are on the SDKs (`guardCheck` / `reviewWork`, `guard_check` / `review_work`) and on REST as `POST /cogmemai/guard-check` and `POST /cogmemai/intent-check` with a `work` field.
 
 ### CogmemAi Intent: You Read the Intent, Not the Code (v3.26.0)
 
@@ -134,7 +143,7 @@ CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162
 - **Session reminders** — nudges that surface at the start of your next session
 - **Mandatory rules** — define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
 - **Autonomous memory** — captures work even when your Ai skips saves
-- **35+ tools** — the most complete memory toolkit for any Ai system
+- **41 tools** — the most complete memory toolkit for any Ai system, including guard and review calls any Ai can make
 
 ## Quick Start
 
@@ -424,7 +433,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 37 tools that your Ai assistant uses automatically:
+CogmemAi provides 41 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|

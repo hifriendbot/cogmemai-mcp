@@ -517,6 +517,60 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
     }
   );
 
+  // ─── 1c-2. guard_check: may I do this? (any action, any Ai) ─────
+
+  server.tool(
+    'guard_check',
+    'Ask before acting. Judges a proposed action (a command, a message about to be sent, a purchase, a change, anything) against the rules this person has asked their Ai to keep, plus the NEVER and MUST lines of the project intent. Returns allow, ask or deny with the rule that applies. The shell hook does this automatically for commands; call this for everything else, and always before an action that is hard to undo. Fails open: an error is an allow with judged=false.',
+    {
+      action: z.string().min(1).max(4000).describe('The action you intend to take, in plain words or as the exact command or message'),
+      kind: z.enum(['command', 'action', 'message', 'other']).optional().describe('What sort of thing the action is (default: action)'),
+      context: z.string().max(4000).optional().describe('Why you want to do it, or what the person asked for'),
+      project_id: z.string().max(200).optional().describe('Project identifier override (auto-detected if omitted)'),
+    },
+    async ({ action, kind, context, project_id }) => {
+      try {
+        if (!storage.guardCheck) {
+          return wrapError(new Error(`guard_check needs cloud or hybrid mode (current: ${storage.mode}). The judgment runs on the CogmemAi server.`));
+        }
+        const projectId = project_id || detectProjectId();
+        const result = await storage.guardCheck({ action, kind: kind || 'action', context: context || '', project_id: projectId });
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1c-3. review_work: did I do what was asked? (any work, any Ai) ──
+
+  server.tool(
+    'review_work',
+    'Review finished work against the intent: what the person set out to have done, what must always hold, what was decided. Pass a description, output, message or transcript of what you did; the project intent document is used, or pass intent inline when there is none. Returns a plain summary, what the intent covers, what it does not, and any violations. The Stop hook does this automatically for code changes in a repository; call this for everything else.',
+    {
+      work: z.string().min(10).max(30000).describe('What was done: a description, the output, a message, or a transcript'),
+      intent: z.string().max(6000).optional().describe('Inline intent to judge against, used only when the project has no stored intent document'),
+      project_id: z.string().max(200).optional().describe('Project identifier override (auto-detected if omitted)'),
+    },
+    async ({ work, intent, project_id }) => {
+      try {
+        if (!storage.intentCheck) {
+          return wrapError(new Error(`review_work needs cloud or hybrid mode (current: ${storage.mode}). The judgment runs on the CogmemAi server.`));
+        }
+        const projectId = project_id || detectProjectId();
+        const body: Record<string, unknown> = { project_id: projectId, work };
+        if (intent) body.intent = intent;
+        const result = (await storage.intentCheck(body)) as { judged?: boolean; reason?: string };
+        if (result && result.judged === false && result.reason === 'no_intent') {
+          return wrapResult({ ...result, hint: 'No intent document for this project. Record one with set_intent, or pass intent inline.' }, true);
+        }
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
   // ─── 1d. delete_rule ──────────────────────────────────────
 
   server.tool(

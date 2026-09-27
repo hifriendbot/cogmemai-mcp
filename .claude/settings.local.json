@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Skill(schedule)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "cogmemai",
+    "guessmarket",
+    "agentwallet"
+  ]
+}

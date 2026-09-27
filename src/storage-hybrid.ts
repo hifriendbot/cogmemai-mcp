@@ -151,6 +151,14 @@ export class HybridStorage implements StorageBackend {
     return this.cloud.setIntent(body);
   }
 
+  async guardCheck(body: Record<string, unknown>): Promise<unknown> {
+    return this.cloud.guardCheck(body);
+  }
+
+  async intentCheck(body: Record<string, unknown>): Promise<unknown> {
+    return this.cloud.intentCheck(body);
+  }
+
   // ─── Content & Metadata ────────────────────────────────
 
   async exportMemories(params: Record<string, unknown>): Promise<unknown> {

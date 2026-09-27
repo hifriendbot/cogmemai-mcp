@@ -77,6 +77,16 @@ export class CloudStorage implements StorageBackend {
     return api('/cogmemai/intent', 'POST', body, undefined, this.apiKey);
   }
 
+  // ─── Universal guard and review (v3.28.0) ───────────────
+
+  async guardCheck(body: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/guard-check', 'POST', body, 15000, this.apiKey);
+  }
+
+  async intentCheck(body: Record<string, unknown>): Promise<unknown> {
+    return api('/cogmemai/intent-check', 'POST', body, 20000, this.apiKey);
+  }
+
   async listTrash(params: Record<string, unknown>): Promise<unknown> {
     return api('/cogmemai/trash', 'GET', params, undefined, this.apiKey);
   }

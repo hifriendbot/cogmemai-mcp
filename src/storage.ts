@@ -57,6 +57,10 @@ export interface StorageBackend {
   // ─── Project Intent (v3.26.0; cloud-backed, the judgment runs server-side) ───
   getIntent?(params: Record<string, unknown>): Promise<unknown>;
   setIntent?(body: Record<string, unknown>): Promise<unknown>;
+
+  // ─── Universal guard and review (v3.28.0; any action, any work, judged server-side) ───
+  guardCheck?(body: Record<string, unknown>): Promise<unknown>;
+  intentCheck?(body: Record<string, unknown>): Promise<unknown>;
 }
 
 /**

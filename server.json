@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hifriendbot/cogmemai",
-  "description": "The smart memory layer for everything Ai. 95.10% LongMemEval (highest published).",
+  "description": "A thinking, live memory for everything Ai. It remembers, enforces your rules, and reviews the work.",
   "repository": {
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
   },
-  "version": "3.27.1",
+  "version": "3.28.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.27.1",
+      "version": "3.28.0",
       "transport": {
         "type": "stdio"
       },
@@ -28,7 +28,7 @@
     {
       "registryType": "npm",
       "identifier": "cogmemai-mcp",
-      "version": "3.27.1",
+      "version": "3.28.0",
       "transport": {
         "type": "streamable-http",
         "url": "https://hifriendbot.com/mcp/"
