@@ -13,7 +13,7 @@
 
 import { execSync } from 'child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
-import { basename, extname, join } from 'path';
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'path';
 import { FLAG_DIR } from './config.js';
 import { formatIntentNotes, type IntentCheckResult, type IntentLogEntry } from './guard.js';
 
@@ -259,11 +259,11 @@ export function readIntentLog(): IntentLogEntry[] {
  * the project has no intent, when nothing changed, and when the change is
  * covered.
  */
-async function intentReview(root: string, files: string[], opt: ReviewOptions): Promise<string[]> {
+async function intentReview(root: string, files: string[], opt: ReviewOptions, preparedDiff?: string): Promise<string[]> {
   if (!opt.intent || !opt.apiKey || !opt.projectId) return [];
-  const diff = turnDiff(root);
+  const diff = preparedDiff !== undefined ? preparedDiff : turnDiff(root);
   if (diff.trim().length < 10) return [];
-  const commit = git(['rev-parse', '--short', 'HEAD'], root).trim();
+  const commit = preparedDiff !== undefined ? '' : git(['rev-parse', '--short', 'HEAD'], root).trim();
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), opt.intentTimeoutMs || 9000);
   const started = Date.now();
@@ -337,6 +337,10 @@ export interface ReviewOptions {
   projectId?: string;
   intent?: { content: string; memory_id: number } | null;
   intentTimeoutMs?: number;
+  /** v3.29.0: the session's edit-event log, read when the folder is not a git repository. */
+  eventsPath?: string;
+  /** v3.29.0: resolve the project id and cached intent for a folder touched by an edit (a project under the cwd). */
+  intentForDir?: (dir: string) => { projectId: string; intent: { content: string; memory_id: number } | null } | null;
 }
 
 /**
@@ -418,6 +422,129 @@ export function pickLandmines(memories: Array<{ content?: string }>, files: stri
  * stays silent: a tree that has carried three edited files all day must
  * not produce the same notes after every message.
  */
+/** One edit or write the PostToolUse hook recorded. Field bodies are truncated by the hook. */
+export interface EditEvent {
+  tool: string;
+  file: string;
+  oldText: string;
+  newText: string;
+}
+
+/**
+ * Edit events after `offset` bytes of the session's event log, and the log's
+ * current size. Only Edit, MultiEdit, Write and NotebookEdit lines count.
+ */
+export function readEditEvents(eventsPath: string, offset = 0): { events: EditEvent[]; size: number } {
+  let text = '';
+  let size = 0;
+  try {
+    size = statSync(eventsPath).size;
+    if (size <= offset) return { events: [], size };
+    text = readFileSync(eventsPath, 'utf-8').slice(offset);
+  } catch {
+    return { events: [], size: 0 };
+  }
+  const events: EditEvent[] = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let rec: { tool?: string; input?: Record<string, unknown> };
+    try {
+      rec = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const tool = String(rec.tool || '');
+    if (!/^(Edit|MultiEdit|Write|NotebookEdit)$/.test(tool)) continue;
+    const input = rec.input || {};
+    const file = String(input.file_path || input.notebook_path || input.path || '');
+    if (!file) continue;
+    events.push({
+      tool,
+      file,
+      oldText: typeof input.old_string === 'string' ? input.old_string : '',
+      newText: typeof input.new_string === 'string' ? input.new_string : (typeof input.content === 'string' ? input.content : ''),
+    });
+  }
+  return { events, size };
+}
+
+/**
+ * A unified-diff-shaped text built from edit events, so the same intent judge
+ * that reads `git diff` can read a turn made in a folder git never saw.
+ */
+export function editEventsToDiff(events: EditEvent[], cwd: string): { diff: string; files: string[]; added: string[] } {
+  const parts: string[] = [];
+  const files: string[] = [];
+  const added: string[] = [];
+  const rel = (f: string) => {
+    if (!isAbsolute(f)) return f;
+    const r = relative(cwd, f);
+    return r && !r.startsWith('..') ? r.split(sep).join('/') : f;
+  };
+  for (const e of events) {
+    const path = rel(e.file);
+    if (!files.includes(path)) files.push(path);
+    const newLines = e.newText.split('\n');
+    for (const l of newLines) if (l.trim()) added.push(l);
+    if (e.tool === 'Write') {
+      parts.push(`diff --git a/${path} b/${path}\nwritten whole file\n+++ b/${path}\n` + newLines.slice(0, 200).map((l) => '+' + l).join('\n'));
+    } else {
+      parts.push(`diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ edit @@\n` + e.oldText.split('\n').map((l) => '-' + l).join('\n') + '\n' + newLines.map((l) => '+' + l).join('\n'));
+    }
+  }
+  const all = parts.join('\n');
+  return { diff: all.length > INTENT_DIFF_MAX_CHARS ? all.slice(0, INTENT_DIFF_MAX_CHARS) + '\n[diff truncated]' : all, files, added };
+}
+
+/** The folder a touched file belongs to: the first folder under the cwd, else the file's own folder. */
+function projectDirFor(file: string, cwd: string): string {
+  if (!isAbsolute(file)) return cwd;
+  const r = relative(cwd, file);
+  if (!r || r.startsWith('..')) return dirname(file);
+  const first = r.split(sep)[0];
+  return first && first !== basename(file) ? join(cwd, first) : cwd;
+}
+
+/**
+ * The review when there is no git root: what this session's edit events say
+ * changed. Secrets are checked on the added text; remembered landmines are
+ * recalled for the touched files; the intent check runs against the cwd's
+ * intent and, for edits inside a sub-folder that has its own intent, against
+ * that one too, so work on several projects from one home directory is judged
+ * project by project.
+ */
+export async function reviewFromEvents(cwd: string, opt: ReviewOptions & { lastFingerprint?: string; onFingerprint?: (fp: string) => void }): Promise<string[]> {
+  if (!opt.eventsPath) return [];
+  const last = opt.lastFingerprint && opt.lastFingerprint.startsWith('events:') ? Number(opt.lastFingerprint.slice(7)) || 0 : 0;
+  const { events, size } = readEditEvents(opt.eventsPath, last);
+  if (events.length === 0) return [];
+  if (opt.onFingerprint) opt.onFingerprint('events:' + size);
+  const { diff, files, added } = editEventsToDiff(events, cwd);
+  const notes: string[] = [];
+  notes.push(...checkSecrets(added));
+  const jobs: Array<Promise<string[]>> = [memoryLandmines(cwd, files, opt), intentReview(cwd, files, opt, diff)];
+  // Sub-folder projects with their own intent get their own review.
+  if (opt.intentForDir) {
+    const groups = new Map<string, EditEvent[]>();
+    for (const e of events) {
+      const dir = projectDirFor(e.file, cwd);
+      if (dir === cwd) continue;
+      groups.set(dir, [...(groups.get(dir) || []), e]);
+    }
+    for (const [dir, evs] of groups) {
+      const found = opt.intentForDir(dir);
+      if (!found || !found.intent || found.projectId === opt.projectId) continue;
+      const sub = editEventsToDiff(evs, dir);
+      jobs.push(
+        intentReview(dir, sub.files, { ...opt, projectId: found.projectId, intent: found.intent }, sub.diff)
+          .then((ns) => ns.map((n) => `[${found.projectId}] ${n}`)),
+      );
+    }
+  }
+  for (const ns of await Promise.all(jobs)) notes.push(...ns);
+  return notes;
+}
+
 export function treeFingerprint(root: string): string {
   return [git(['status', '--porcelain'], root), git(['diff', '--shortstat'], root), git(['diff', '--cached', '--shortstat'], root)].join('|');
 }
@@ -425,7 +552,7 @@ export function treeFingerprint(root: string): string {
 /** Review the working tree at `cwd`. Returns advisory notes; empty means a clean turn. */
 export async function reviewWorkingTree(cwd: string, opt: ReviewOptions & { lastFingerprint?: string; onFingerprint?: (fp: string) => void }): Promise<string[]> {
   const root = git(['rev-parse', '--show-toplevel'], cwd).trim();
-  if (!root) return [];
+  if (!root) return reviewFromEvents(cwd, opt); // no repository: the edit-event log is the diff
   const { files, deleted } = changedFiles(root);
   if (files.length === 0 && deleted.length === 0) return [];
   const fp = treeFingerprint(root);

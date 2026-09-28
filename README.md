@@ -18,6 +18,10 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### The Review Works Outside Git (v3.29.0)
+
+The end-of-turn review used to need a git repository, because it read `git diff`. Most folders people work in from a home directory are not repositories, and neither are most non-coders' projects. v3.29.0 reads this session's edit events instead (the PostToolUse hook already records every Edit and Write), builds the same diff shape from them, checks the added text for secrets, recalls remembered landmines for the touched files, and runs the intent check. Work on several projects from one folder is judged project by project: an edit under `~/NullJury` is reviewed against NullJury's intent when it has one, and the note is prefixed with that project id. Nothing changes inside a repository.
+
 ### Guard and Review for Everything, Not Only Code (v3.28.0)
 
 Until now the guard judged shell commands and the intent review judged code diffs, because those were the hooks a coding tool gave us. v3.28.0 opens both to any Ai through two tools and two REST endpoints:
@@ -315,6 +319,8 @@ cogmemai-mcp guard intent-grade [#] right|wrong [why]   grade a note (default: t
 Precision, right divided by graded, is the number that decides whether the review earns its place; the target is nine of ten. A "closed loop" is a gap note followed within the hour by an intent update in the same project, which is the owner saying "add that to the intent" and the feature doing its job.
 
 **Any work, not only diffs (v3.28.0).** The `review_work` tool (or `POST /cogmemai/intent-check` with a `work` field, or `reviewWork` in the SDKs) reviews a description, an output, a message or a whole transcript against the intent, with the same result shape: summary, covered, uncovered, violations, coverage. Pass `intent` inline when the project has no stored document, for an assistant judging one conversation or a robot checking one task.
+
+**Outside git (v3.29.0).** When the folder is not a repository, the review reads the session's edit-event log instead of `git diff`, so it works from any cwd, and edits inside a sub-folder that is its own project are judged against that project's intent.
 
 **Tiers.** The judged check runs on the paid tiers, because each one is a model request. The free tier gets the enforced invariants, the context injection, and every deterministic review. Local-only storage mode has no intent document, since the judgment needs the server.
 

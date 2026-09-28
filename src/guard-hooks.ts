@@ -383,6 +383,14 @@ export async function runHookGuardReview(): Promise<void> {
       projectId,
       intent: loadIntent(projectId),
       intentTimeoutMs: INTENT_CHECK_TIMEOUT_MS,
+      // Outside a git repository the review reads this session's edit events
+      // (the PostToolUse hook writes them), and a sub-folder that is its own
+      // project is judged against its own intent.
+      eventsPath: join(FLAG_DIR, `events-${safeName(String(input.session_id || ''))}.jsonl`),
+      intentForDir: (dir: string) => {
+        const pid = projectIdFor(dir);
+        return { projectId: pid, intent: loadIntent(pid) };
+      },
       lastFingerprint,
       onFingerprint: (fp) => {
         try {
