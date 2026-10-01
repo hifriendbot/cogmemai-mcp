@@ -11,7 +11,7 @@
 // Target: local MCP server
 $TARGET = 'http://127.0.0.1:3100';
 
-// Allowed paths — whitelist to prevent SSRF
+// Allowed paths: whitelist to prevent SSRF
 $ALLOWED_PATHS = ['/mcp', '/health'];
 
 // Allowed HTTP methods
@@ -36,12 +36,31 @@ if ($method === 'OPTIONS') {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version, COGMEMAI_API_KEY');
-    header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version');
+    header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate');
     http_response_code(204);
     exit;
 }
 
-// Build target URL — only allow whitelisted paths
+// OAuth 2.1 discovery (MCP authorization spec): an unauthenticated request to the MCP endpoint
+// gets a 401 that names the protected-resource metadata, so clients such as claude.ai can find
+// the authorization server, register, and sign the user in. /health stays open.
+$WWW_AUTH = 'WWW-Authenticate: Bearer realm="CogmemAi", resource_metadata="https://hifriendbot.com/.well-known/oauth-protected-resource/mcp"';
+$path_probe = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : '';
+if ($path_probe !== '/health' && empty($_SERVER['HTTP_AUTHORIZATION']) && empty($_SERVER['HTTP_COGMEMAI_API_KEY'])) {
+    http_response_code(401);
+    header($WWW_AUTH);
+    header('Content-Type: application/json');
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Expose-Headers: WWW-Authenticate');
+    echo json_encode([
+        'jsonrpc' => '2.0',
+        'error' => ['code' => -32001, 'message' => 'Authentication required: sign in through OAuth (see WWW-Authenticate) or send Authorization: Bearer cm_YOUR_KEY.'],
+        'id' => null,
+    ]);
+    exit;
+}
+
+// Build target URL, only allow whitelisted paths
 $path = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : '';
 if (empty($path)) {
     $path = '/mcp';
@@ -98,7 +117,7 @@ $response_code = 200;
 // Whitelisted response header prefixes
 $allowed_response_headers = ['content-type:', 'mcp-session-id:', 'mcp-protocol-version:', 'cache-control:'];
 
-curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) use (&$response_headers_sent, &$response_code, $allowed_response_headers) {
+curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) use (&$response_headers_sent, &$response_code, $allowed_response_headers, $WWW_AUTH) {
     $len = strlen($header);
     $trimmed = trim($header);
 
@@ -126,7 +145,10 @@ curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) use (&$response
                 if (!$response_headers_sent) {
                     http_response_code($response_code);
                     header('Access-Control-Allow-Origin: *');
-                    header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version');
+                    header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate');
+                    if ($response_code === 401) {
+                        header($WWW_AUTH);
+                    }
                     $response_headers_sent = true;
                 }
                 header($name . ': ' . $safe_value);
@@ -138,11 +160,14 @@ curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) use (&$response
     return $len;
 });
 
-curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use (&$response_headers_sent, &$response_code) {
+curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use (&$response_headers_sent, &$response_code, $WWW_AUTH) {
     if (!$response_headers_sent) {
         http_response_code($response_code);
         header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version');
+        header('Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate');
+        if ($response_code === 401) {
+            header($WWW_AUTH);
+        }
         header('Content-Type: text/event-stream');
         $response_headers_sent = true;
     }

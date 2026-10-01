@@ -10,6 +10,7 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 import type { StorageBackend } from './storage.js';
 import { detectProjectId } from './project.js';
+import { TOOL_ANNOTATIONS } from './tool-annotations.js';
 import { writeIntentCache } from './guard-hooks.js';
 import { logIntent } from './guard-review.js';
 import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
@@ -227,6 +228,17 @@ function wrapError(error: unknown): { content: Array<{ type: 'text'; text: strin
  * Register all CogmemAi tools on the MCP server.
  */
 export function registerTools(server: McpServer, storage: StorageBackend): void {
+  // Attach MCP annotations (title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+  // to every tool from one table, so clients can label tools and decide what to confirm.
+  const originalTool = server.tool.bind(server) as (...args: unknown[]) => unknown;
+  (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
+    const name = args[0] as string;
+    const ann = TOOL_ANNOTATIONS[name];
+    if (ann && args.length === 4 && typeof args[1] === 'string') return originalTool(name, args[1], args[2], ann, args[3]);
+    if (ann && args.length === 3 && typeof args[1] === 'string') return originalTool(name, args[1], {}, ann, args[2]);
+    return originalTool(...args);
+  };
+
   // ─── 1. save_memory ──────────────────────────────────────
 
   server.tool(
