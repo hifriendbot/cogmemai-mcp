@@ -2444,6 +2444,11 @@ export function showHelp(): void {
   log(`    cogmemai-mcp guard shell-install Guard every bash -c / zsh -c from any tool, not just Claude Code (v3.25+)`);
   log(`    cogmemai-mcp guard shell-remove  Undo shell-install`);
   log('');
+  log(`  ${BOLD}Rule packs (v3.30+):${RESET}`);
+  log(`    cogmemai-mcp rules list          Packs you can install (devsecops: 40 rules)`);
+  log(`    cogmemai-mcp rules show <pack>   Read a pack's rules before installing`);
+  log(`    cogmemai-mcp rules install <pack> [--global] [--intent] [--dry-run]`);
+  log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);
   log(`    2. Run ${CYAN}npx cogmemai-mcp setup${RESET}`);

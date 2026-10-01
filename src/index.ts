@@ -12,7 +12,8 @@
 
 import { VERSION, STORAGE_MODE } from './config.js';
 import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload, runHookStop, runHookPostToolUse, runHookPostToolUseEdit, runHookSessionStart } from './cli.js';
-import { runHookPreToolUse, runHookGuardReview, runGuardCli } from './guard-hooks.js';
+import { runHookPreToolUse, runHookGuardReview, runGuardCli, resolveKey } from './guard-hooks.js';
+import { runRulesCli } from './packs.js';
 
 // Shared state: latest version from npm (set by checkForUpdate, read by tools)
 export let latestVersion: string | null = null;
@@ -55,6 +56,11 @@ if (subcommand === 'setup') {
 } else if (subcommand === 'guard') {
   runGuardCli(process.argv.slice(3)).catch((err) => {
     console.error('Guard failed:', err.message || err);
+    process.exit(1);
+  });
+} else if (subcommand === 'rules') {
+  runRulesCli(process.argv.slice(3), resolveKey).catch((err) => {
+    console.error('Rules failed:', err.message || err);
     process.exit(1);
   });
 } else if (subcommand === 'verify') {

@@ -18,6 +18,10 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### Rule Packs: a Security Policy in One Command (v3.30.0)
+
+`npx cogmemai-mcp rules install devsecops` installs 40 ready-made rules covering secrets, infrastructure as code, least privilege, network exposure, CI/CD gates, change control, containers and Kubernetes, data handling, logging and incident response, plus the rules an Ai agent on your infrastructure must obey. Each rule is an ordinary rule memory: its shell patterns stop commands before they run (`terraform destroy`, `--acl public-read`, `curl | bash`, `kubectl delete namespace`, a key pasted into `export`), and its plain words drive the judged `guard_check` and the end-of-turn review, so "copy the production dump to my laptop" is denied even though no shell pattern matches it. Add `--intent` to give the project a platform-and-security intent document when it has none, `--global` to apply the pack to every project, `--dry-run` to see what would be installed. Reinstalling skips rules already present, and `rules show devsecops` prints the whole pack before you commit to it. Rules are editable afterward like any memory.
+
 ### The Review Works Outside Git (v3.29.0)
 
 The end-of-turn review used to need a git repository, because it read `git diff`. Most folders people work in from a home directory are not repositories, and neither are most non-coders' projects. v3.29.0 reads this session's edit events instead (the PostToolUse hook already records every Edit and Write), builds the same diff shape from them, checks the added text for secrets, recalls remembered landmines for the touched files, and runs the intent check. Work on several projects from one folder is judged project by project: an edit under `~/NullJury` is reviewed against NullJury's intent when it has one, and the note is prefixed with that project id. Nothing changes inside a repository.
@@ -233,6 +237,9 @@ npx cogmemai-mcp guard log [n]  # Show the last n verdicts
 npx cogmemai-mcp guard install  # Add the guard hooks to an existing setup
 npx cogmemai-mcp guard shell-install   # Guard bash -c / zsh -c from any tool, not just Claude Code
 npx cogmemai-mcp guard shell-remove    # Undo shell-install
+npx cogmemai-mcp rules list            # Rule packs you can install (v3.30+)
+npx cogmemai-mcp rules show devsecops  # Read a pack before installing it
+npx cogmemai-mcp rules install devsecops [--global] [--intent] [--dry-run]
 ```
 
 ## Guard
@@ -268,6 +275,12 @@ When a remembered rule fires, the reason quotes the rule and names it, and the w
 **What it is not.** It is not a sandbox and not a substitute for git, backups, or review. A blanket `Bash` entry in `permissions.allow` makes an "ask" verdict inert, which is why the guard denies rather than asks.
 
 **For every other Ai (v3.28.0).** Hooks are how a coding tool asks. Anything else asks with one call: the `guard_check` tool (or `POST /cogmemai/guard-check`, or `guardCheck` in the SDKs) takes a proposed action in plain words or as the exact command or message, plus an optional `kind` (command, action, message, other) and `context`, and answers `allow`, `ask` or `deny` with the rule that applies. Two passes: a literal pass on every tier (a fragment a rule quotes that appears verbatim in the action), and a judged pass on the paid tiers against every rule memory and the NEVER and MUST lines of the project intent. The stricter verdict wins, and it fails open: an error is an allow marked `judged: false`. A support assistant about to send a message, an agent about to spend, a robot about to move, all judged by the same words you saved once.
+
+## Rule Packs
+
+A rule pack is a set of rules written to be installed together. The first pack, `devsecops`, holds 40 rules for teams running Ai agents on cloud infrastructure: secrets (never committed, printed or put on a command line; rotated on exposure), infrastructure as code (plan, review, apply from CI; no console changes, no destroy, no state surgery), least privilege (no admin or wildcard policies, no long-lived keys, agents get their own scoped identity), nothing public by accident (buckets, snapshots, security groups), CI/CD gates that block merges, change control (reviewed pull requests, dated backups and rollbacks, freeze windows), supply chain (no piped installers, pinned versions), containers and Kubernetes (no privileged, no cluster-admin, no destructive kubectl against production), data (encrypted, never copied to laptops or agents, destructive SQL only through migrations), logging (central, immutable, never disabled, never holding secrets), incident response (declare early, contain then preserve evidence, blameless postmortem, regulatory clock), and one rule for the agents themselves: guard_check before, review_work after, never approve or merge your own work.
+
+Every rule carries explicit `GUARD:` patterns where a shell shape exists, so the pre-run guard enforces them with no model call, and `GUARD: off` where only prose applies, so nothing is guessed. Install with `npx cogmemai-mcp rules install devsecops`, read first with `rules show devsecops`, scope to all projects with `--global`, and add `--intent` to install the matching intent document (purpose, nine invariants, out of scope, definition of done) when the project has none. The pack is a starting point: edit, delete or add rules afterward the same way as any memory.
 
 ## Intent
 

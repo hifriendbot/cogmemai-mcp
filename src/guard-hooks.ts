@@ -72,7 +72,7 @@ function readStdinJson(): Record<string, any> {
   }
 }
 
-function resolveKey(): string {
+export function resolveKey(): string {
   if (process.env.COGMEMAI_API_KEY) return process.env.COGMEMAI_API_KEY;
   try {
     const cfg = JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf-8'));
