@@ -178,7 +178,7 @@ npx cogmemai-mcp setup
 
 The setup wizard walks you through three choices: **Cloud** (recommended — full Ai intelligence), **Local** (data stays on your machine), or **Hybrid** (both). Pick your mode, enter your API key if needed, and you're ready in under 60 seconds.
 
-Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/). Or choose Local mode to start immediately with no account.
+Don't have an API key yet? Get one free at [hifriendbot.com/developer](https://hifriendbot.com/developer/). Every mode needs a free key, including Local mode, where it works like a license key and your data never leaves your machine.
 
 ## The Problem
 
@@ -541,14 +541,16 @@ Memories are categorized for better organization and retrieval:
 
 ## Pricing
 
-| | Free | Pro | Team | Enterprise |
-|---|---|---|---|---|
-| **Price** | $0 | $14.99/mo | $39.99/mo | $99.99/mo |
-| **Memories** | 500 | 2,000 | 10,000 | 50,000 |
-| **Extractions/mo** | 500 | 2,000 | 5,000 | 20,000 |
-| **Projects** | 5 | 20 | 50 | 200 |
+| | Free | Personal | Pro | Team (per seat) | Enterprise |
+|---|---|---|---|---|---|
+| **Price** | $0 | $3.99/mo | $9.99/mo | $49.99/mo | $99.99/mo |
+| **Memories** | 500 | 1,000 | 2,000 | 10,000 | 50,000 |
+| **Extractions/mo** | 500 | 500 | 2,000 | 5,000 | 20,000 |
+| **Saves/mo** | 1,000 | 2,000 | 5,000 | 20,000 | 100,000 |
+| **Projects** | 5 | 10 | 20 | 50 | 200 |
+| **Judged guard_check and review_work** | | yes | yes | yes | yes |
 
-Start free. Upgrade when you need more. Or pay per operation with USDC on-chain — no credit card required.
+Current plans and limits: [hifriendbot.com/pricing](https://hifriendbot.com/pricing/). The shell guard, rule packs and the migrate inventory work on every tier, including free. Start free. Upgrade when you need more. Or pay per operation with USDC on-chain — no credit card required.
 
 ## Privacy & Security
 
