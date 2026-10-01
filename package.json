@@ -1,6 +1,6 @@
 {
   "name": "cogmemai-mcp",
-  "version": "3.30.1",
+  "version": "3.31.0",
   "mcpName": "io.github.hifriendbot/cogmemai",
   "description": "CogmemAi is a thinking, live memory for everything Ai. It remembers what matters across every session, enforces the rules you set before an action happens, and reviews what your Ai did against what you asked for. Rule packs: npx cogmemai-mcp rules install devsecops loads forty DevSecOps rules (secrets, infrastructure as code, least privilege, CI/CD gates, change control, data, logging, incident response) that stop risky shell commands before they run, judge plain-English actions, and review each turn against the project's intent. Persistent memory, guardrails and quality reviews for any Ai system through MCP, REST and SDKs. 95.10% LongMemEval, highest published.",
   "type": "module",

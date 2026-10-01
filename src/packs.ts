@@ -15,6 +15,7 @@
 import { CloudStorage } from './storage-cloud.js';
 import { syncGuardRules, projectIdFor } from './guard-hooks.js';
 import { API_BASE, VERSION, HOOK_FETCH_TIMEOUT_MS } from './config.js';
+import { CLOUD_PACKS } from './packs-cloud.js';
 
 export interface PackRule {
   subject: string;
@@ -386,7 +387,7 @@ This project runs and secures the production platform. Changes must keep product
 `,
 };
 
-export const PACKS: RulePack[] = [DEVSECOPS];
+export const PACKS: RulePack[] = [DEVSECOPS, ...CLOUD_PACKS];
 
 export function findPack(id: string): RulePack | undefined {
   return PACKS.find((p) => p.id === id.toLowerCase());

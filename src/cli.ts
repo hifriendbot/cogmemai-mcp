@@ -2445,9 +2445,11 @@ export function showHelp(): void {
   log(`    cogmemai-mcp guard shell-remove  Undo shell-install`);
   log('');
   log(`  ${BOLD}Rule packs (v3.30+):${RESET}`);
-  log(`    cogmemai-mcp rules list          Packs you can install (devsecops: 40 rules)`);
+  log(`    cogmemai-mcp rules list          Packs you can install (devsecops, aws, azure, gcp, migrate)`);
   log(`    cogmemai-mcp rules show <pack>   Read a pack's rules before installing`);
   log(`    cogmemai-mcp rules install <pack> [--global] [--intent] [--dry-run]`);
+  log(`    cogmemai-mcp migrate assess --target aws|azure|gcp   Inventory the repo, write the migration scope as intent, plan + risks, install packs`);
+  log(`    cogmemai-mcp migrate gate "<phase>"   Review a migration phase against the scope (passes at coverage 80, no violations)`);
   log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);
