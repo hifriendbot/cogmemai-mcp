@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hifriendbot/cogmemai",
-  "description": "A thinking, live memory for everything Ai. It remembers, enforces your rules, and reviews the work. Rule packs: rules install devsecops loads forty DevSecOps rules that stop risky commands, judge actions and review each turn against intent.",
+  "description": "Memory for any Ai: remembers across sessions, enforces your rules before actions, reviews the work.",
   "repository": {
     "url": "https://github.com/hifriendbot/cogmemai-mcp",
     "source": "github"
