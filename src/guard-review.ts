@@ -327,6 +327,11 @@ const GENERIC = new Set([
   'types', 'api', 'data', 'core', 'common', 'lib', 'readme', 'license', 'setup', 'script', 'scripts', 'style', 'styles',
   'hook', 'hooks', 'json', 'file', 'files',
 ]);
+// File names whose stem is an everyday word in memories (CLAUDE.md, MEMORY.md,
+// settings.json). For these only the full file name anchors a remembered line:
+// an edit of CLAUDE.md once surfaced a note about a test script, because the
+// note mentioned ~/.claude.json and the word "never".
+const NAME_ONLY = new Set(['claude', 'agents', 'gemini', 'copilot', 'cursor', 'memory', 'settings', 'changelog']);
 
 export interface ReviewOptions {
   apiKey: string;
@@ -389,15 +394,30 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
  */
 export function pickLandmines(memories: Array<{ content?: string }>, files: string[]): string[] {
   const anchors = new Set<string>();
+  const fullNames = new Set<string>();
   for (const f of files.slice(0, 12)) {
     const lower = basename(f).toLowerCase();
     const stem = lower.replace(/\.[^.]+$/, '');
     if (GENERIC.has(stem) || stem.length <= 4) continue;
     anchors.add(lower);
-    anchors.add(stem);
+    fullNames.add(lower);
+    if (!NAME_ONLY.has(stem)) anchors.add(stem);
   }
   if (anchors.size === 0) return [];
-  const anchorRe = new RegExp('(?<![A-Za-z0-9])(' + [...anchors].sort().map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z0-9])', 'i');
+  // Longest first, so a full file name is reported in preference to its stem.
+  const ordered = [...anchors].sort((a, b) => b.length - a.length || a.localeCompare(b));
+  const anchorRe = new RegExp('(?<![A-Za-z0-9])(' + ordered.map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z0-9])', 'gi');
+  // True when the sentence names a touched file. A bare stem straight after a
+  // dot belongs to some other name (.claude.json, ~/.cogmemai/), so it does
+  // not count; a full file name always does.
+  const namesTouchedFile = (s: string): boolean => {
+    anchorRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = anchorRe.exec(s)) !== null) {
+      if (fullNames.has(m[1].toLowerCase()) || s[m.index - 1] !== '.') return true;
+    }
+    return false;
+  };
 
   const notes: string[] = [];
   for (const mem of memories.slice(0, 6)) {
@@ -406,7 +426,7 @@ export function pickLandmines(memories: Array<{ content?: string }>, files: stri
     const flat = content.replace(/\s+/g, ' ').replace(/[*_`#]+/g, '').trim();
     for (const sentence of flat.split(/(?<=[.!;])\s+/)) {
       let s = sentence.trim();
-      if (s.length < 25 || !RULE_SENTENCE.test(s) || !anchorRe.test(s)) continue;
+      if (s.length < 25 || !RULE_SENTENCE.test(s) || !namesTouchedFile(s)) continue;
       if (s.length > 200) s = s.slice(0, 197).replace(/\s\S*$/, '') + '...';
       notes.push('Remembered: ' + s);
       break;

@@ -225,6 +225,36 @@ test('review shows a remembered line only when the sentence names a touched file
   assert.deepEqual(pickLandmines(relevant, ['index.php', 'api.ts', 'a.js']), []);
 });
 
+test('review does not mistake another file for the one being edited', () => {
+  // The line that was wrongly surfaced after an edit of CLAUDE.md: a note
+  // about a test script that mentions ~/.claude.json and the word "never".
+  const harness = [{ content: 'Review rules work. Test harness: scratchpad reviewrules/rrtest.py (reads the key from ~/.claude.json, never prints it). Results were clean.' }];
+  const edited = ['C:/Users/scott/.claude/CLAUDE.md', 'scratchpad/scan.mjs'];
+  assert.deepEqual(pickLandmines(harness, edited), []);
+
+  // The product name is not the file either.
+  assert.deepEqual(pickLandmines([{ content: 'ALWAYS have Claude verify the deploy before reporting it done.' }], edited), []);
+
+  // A line that names the file itself is still shown.
+  const real = pickLandmines([{ content: 'NEVER remove the hard rules section from CLAUDE.md without asking first.' }], edited);
+  assert.equal(real.length, 1);
+  assert.ok(real[0].startsWith('Remembered: NEVER remove the hard rules section from CLAUDE.md'));
+  assert.equal(pickLandmines([{ content: 'Do not edit ~/.claude/CLAUDE.md while another session is writing to it.' }], edited).length, 1);
+
+  // Everyday-word file names anchor on the full name only.
+  assert.deepEqual(pickLandmines([{ content: 'Make sure the Reef settings page keeps the timezone picker.' }], ['.claude/settings.json']), []);
+  assert.equal(pickLandmines([{ content: 'NEVER hand-edit settings.json while a session is running.' }], ['.claude/settings.json']).length, 1);
+  assert.deepEqual(pickLandmines([{ content: 'ALWAYS save a memory after fixing a bug in this project.' }], ['memory/MEMORY.md']), []);
+
+  // A stem straight after a dot is a different name: a dot directory, not the file.
+  const plugin = ['includes/cogmemai-store.php'];
+  assert.deepEqual(pickLandmines([{ content: 'Do not delete ~/.cogmemai-store/debt.json by hand, it resets the counter.' }], plugin), []);
+  assert.equal(pickLandmines([{ content: 'NEVER change cogmemai-store.php without checking the Unforget callers.' }], plugin).length, 1);
+  assert.equal(pickLandmines([{ content: 'NEVER change the cogmemai-store class without checking the Unforget callers.' }], plugin).length, 1);
+  // The full name counts even when something dotted precedes it.
+  assert.equal(pickLandmines([{ content: 'NEVER load class.cogmemai-store.php twice in one request.' }], ['includes/class.cogmemai-store.php']).length, 1);
+});
+
 // ── Shell adapter ───────────────────────────────────────────
 
 import { spawnSync } from 'node:child_process';
