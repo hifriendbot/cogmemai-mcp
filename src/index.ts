@@ -273,7 +273,7 @@ Prevent repeated mistakes:
 - Reminders auto-expire after their TTL (default 7 days)
 
 ## Advanced Memory Management
-- recall_memories supports context_type (debugging/planning/reviewing) for type-aware ranking, and synthesize=true for AI-synthesized answers from multiple memories. Automatically detects contradictions (same-subject conflicts) in results.
+- recall_memories supports context_type (debugging/planning/reviewing) for type-aware ranking, and synthesize=true for AI-synthesized answers from multiple memories. For broad searches over long memories, pass max_chars (for example 8000): the best-ranked results come back complete and the rest as snippets you can read in full with expand_ids. Automatically detects contradictions (same-subject conflicts) in results.
 - get_stale_memories — Find outdated memories that need review or removal.
 - consolidate_memories — Merge related memories into fewer, richer summaries. Use dry_run first to preview.
 - Use promote_memory to upgrade a project memory to global when you discover it applies everywhere.

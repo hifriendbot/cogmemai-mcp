@@ -15,6 +15,7 @@ import { writeIntentCache } from './guard-hooks.js';
 import { logIntent } from './guard-review.js';
 import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
+import { applyRecallBudget, resolveRecallBudget, trimRelatedPreview } from './recall-budget.js';
 
 const MEMORY_TYPES = [
   'identity',
@@ -157,7 +158,10 @@ function annotateMergeSuggestion(result: unknown): unknown {
   if (!related || typeof related !== 'object') return result;
 
   const sim = typeof related.similarity === 'number' ? related.similarity : 0;
-  if (sim < MERGE_SUGGESTION_THRESHOLD) return result;
+  // Below the merge threshold the related memory is only a pointer, so a short
+  // preview with its id is enough. At or above it the full text stays, because
+  // merging needs it.
+  if (sim < MERGE_SUGGESTION_THRESHOLD) return trimRelatedPreview(result);
 
   const candidateId = related.memory_id;
   const newId = r.memory_id;
@@ -657,6 +661,12 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
 
   // ─── 2. recall_memories ──────────────────────────────────
 
+  // Full copies of memories this server shortened under a max_chars budget, so
+  // expand_ids can return them without another search. Per connection and
+  // never used on the hosted endpoint, where one process serves many accounts.
+  const expandCache = new Map<number, Record<string, unknown>>();
+  const EXPAND_CACHE_MAX = 300;
+
   server.tool(
     'recall_memories',
     'Search stored memories using semantic search. Returns memories ranked by relevance, importance, and recency. Use this to find relevant context from past sessions.',
@@ -709,12 +719,24 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         .default(false)
         .optional()
         .describe('When true and 3+ results are found, returns an AI-synthesized summary combining all memories into a coherent answer.'),
+      max_chars: z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(200000)
+        .optional()
+        .describe('Optional character budget for the memory text in this result. The best-ranked memories come back complete and the rest are shortened to a snippet that keeps its id. 0 means no limit. Useful for broad searches over long memories.'),
+      expand_ids: z
+        .array(z.coerce.number().int())
+        .max(20)
+        .optional()
+        .describe('Ids of memories that a previous result shortened, to return in full. Pass the same query.'),
     },
-    async ({ query, scope, limit, memory_type, category, importance_min, tag, team_id, context_type, synthesize }) => {
+    async ({ query, scope, limit, memory_type, category, importance_min, tag, team_id, context_type, synthesize, max_chars, expand_ids }) => {
       try {
         const projectId = detectProjectId();
 
-        const result = await storage.recallMemories({
+        const body: Record<string, unknown> = {
           query,
           scope,
           limit,
@@ -726,8 +748,55 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           team_id: team_id || undefined,
           context_type: context_type || undefined,
           synthesize: synthesize || undefined,
-        });
-        return wrapResult(result);
+        };
+
+        // expand_ids: return memories an earlier result shortened, in full.
+        if (expand_ids && expand_ids.length > 0) {
+          const found: Array<Record<string, unknown>> = [];
+          let missing: number[] = [];
+          for (const id of expand_ids) {
+            const hit = expandCache.get(id);
+            if (hit) found.push(hit);
+            else missing.push(id);
+          }
+          if (missing.length > 0) {
+            // Not held here (a restart, or the hosted endpoint): search again
+            // without a budget and pick them out of the results.
+            const again = (await storage.recallMemories({ ...body, limit: 20, synthesize: undefined })) as Record<string, unknown> | null;
+            const pool: unknown[] = [];
+            if (again && Array.isArray(again.memories)) pool.push(...again.memories);
+            if (again && Array.isArray(again.team_memories)) pool.push(...again.team_memories);
+            const stillMissing: number[] = [];
+            for (const id of missing) {
+              const m = pool.find((p) => !!p && typeof p === 'object' && Number((p as Record<string, unknown>).id) === id);
+              if (m) found.push(m as Record<string, unknown>);
+              else stillMissing.push(id);
+            }
+            missing = stillMissing;
+          }
+          const expanded: Record<string, unknown> = { memories: found, total: found.length, expanded: true };
+          if (missing.length > 0) {
+            expanded.not_found = missing;
+            expanded.hint = 'These ids were not in the results for this query. Run recall_memories again with the original query and max_chars: 0.';
+          }
+          return wrapResult(expanded);
+        }
+
+        const result = await storage.recallMemories(body);
+        const budget = resolveRecallBudget(max_chars, process.env.COGMEMAI_RECALL_MAX_CHARS);
+        const { result: budgeted, shortened } = applyRecallBudget(result, budget);
+        if (!remoteMode) {
+          shortened.forEach((memory, id) => {
+            expandCache.delete(id);
+            expandCache.set(id, memory);
+          });
+          while (expandCache.size > EXPAND_CACHE_MAX) {
+            const oldest = expandCache.keys().next().value;
+            if (oldest === undefined) break;
+            expandCache.delete(oldest);
+          }
+        }
+        return wrapResult(budgeted);
       } catch (error) {
         return wrapError(error);
       }

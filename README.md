@@ -18,6 +18,10 @@ CogmemAi is a portable memory layer that gives any Ai system persistent recall a
 
 ## What's New in v3
 
+### A Character Budget for Recall (v3.32.0)
+
+Long memories are worth keeping, and expensive to load ten at a time: every tool result stays in the conversation and is read again on each later turn. `recall_memories` now takes an optional `max_chars`. With a budget, the best-ranked memories come back complete and the rest come back as 400-character snippets that keep their id, type, subject and score, each marked `truncated` with its real length. Nothing is hidden: call `recall_memories` again with the same query and `expand_ids: [..]` to read any of them in full, or pass `max_chars: 0` for everything. To make a budget the default for your own setup, set `COGMEMAI_RECALL_MAX_CHARS` (for example `8000`) in the server's `env`; a `max_chars` on the call always wins. Replayed over a real working day of twelve searches, a budget of 8000 cut recall output by 42 percent. Without a budget, results are exactly what they were before. Save responses are lighter too: the related-memory pointer on `save_memory` is now a 300-character preview with its id, and the full text is still returned whenever the similarity is high enough to suggest a merge.
+
 ### Sign In Instead of Pasting a Key, and Tool Annotations (v3.31.2)
 
 The hosted endpoint `https://hifriendbot.com/mcp/` now speaks OAuth 2.1: an MCP client that supports it (claude.ai, Claude Desktop, Cursor and others) discovers the authorization server from the endpoint's 401, registers itself, sends you to a CogmemAi consent page to sign in, and gets a token with PKCE; API keys keep working exactly as before. Every tool now carries MCP annotations (title, readOnlyHint, destructiveHint, idempotentHint), so clients can label tools and decide what to confirm.
