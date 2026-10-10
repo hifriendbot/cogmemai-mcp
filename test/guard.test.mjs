@@ -255,6 +255,27 @@ test('review does not mistake another file for the one being edited', () => {
   assert.equal(pickLandmines([{ content: 'NEVER load class.cogmemai-store.php twice in one request.' }], ['includes/class.cogmemai-store.php']).length, 1);
 });
 
+test('review does not hand back a note that was just written', () => {
+  // The line that was shown seconds after it was saved: a status note about
+  // the very edit in progress, which names the file and quotes a hard rule.
+  const note = { id: 139604, content: 'RESOLVED CONFLICT (Oct 10 2026, Scott said ok): C:\\Users\\scott\\.claude\\settings.json autoMode.allow used to list "pkill -u ganjacom lsphp to restart PHP workers" as a routine allowed operation, contradicting the never-kill-lsphp hard rule; that phrase was removed.' };
+  const older = { id: 777, content: 'NEVER hand-edit settings.json while a session is running.' };
+  const files = ['C:\\Users\\scott\\.claude\\settings.json'];
+
+  // Without the record of recent writes it is shown, as before.
+  assert.equal(pickLandmines([note], files).length, 1);
+  assert.equal(pickLandmines([note], files, new Set()).length, 1);
+  // Once this machine is known to have just written it, it is not.
+  assert.deepEqual(pickLandmines([note], files, new Set([139604])), []);
+  assert.deepEqual(pickLandmines([{ ...note, id: '139604' }], files, new Set([139604])), [], 'a string id is matched too');
+  // An older memory about the same file takes its place.
+  const notes = pickLandmines([note, older], files, new Set([139604]));
+  assert.equal(notes.length, 1);
+  assert.ok(notes[0].startsWith('Remembered: NEVER hand-edit settings.json'));
+  // A memory with no id is never skipped.
+  assert.equal(pickLandmines([{ content: older.content }], files, new Set([139604])).length, 1);
+});
+
 // ── Shell adapter ───────────────────────────────────────────
 
 import { spawnSync } from 'node:child_process';

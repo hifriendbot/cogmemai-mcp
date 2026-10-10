@@ -16,6 +16,7 @@ import { logIntent } from './guard-review.js';
 import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
 import { applyRecallBudget, resolveRecallBudget, trimRelatedPreview } from './recall-budget.js';
+import { recordWrite } from './recent-writes.js';
 
 const MEMORY_TYPES = [
   'identity',
@@ -142,6 +143,16 @@ function wrapResult(result: unknown, skipReminder = false): { content: Array<{ t
     }
   }
   return { content: [{ type: 'text' as const, text }] };
+}
+
+// v3.32.2: note which memory this machine just saved or updated, so the
+// end-of-turn review does not hand it back as something "remembered". Returns
+// the result unchanged. Never on the hosted endpoint, which serves many accounts.
+function noteWrite<T>(result: T): T {
+  if (!remoteMode && result && typeof result === 'object') {
+    recordWrite((result as Record<string, unknown>).memory_id);
+  }
+  return result;
 }
 
 // v3.19.0 — Surface a merge suggestion when save_* returns a near-duplicate.
@@ -340,7 +351,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (verified !== undefined) body.verified = verified;
         const result = await storage.saveMemory(body);
         resetDebt();
-        return wrapResult(annotateMergeSuggestion(result));
+        return wrapResult(annotateMergeSuggestion(noteWrite(result)));
       } catch (error) {
         return wrapError(error);
       }
@@ -400,7 +411,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (tags && tags.length > 0) body.tags = tags;
         const result = await storage.saveMemory(body);
         resetDebt();
-        return wrapResult(annotateMergeSuggestion(result));
+        return wrapResult(annotateMergeSuggestion(noteWrite(result)));
       } catch (error) {
         return wrapError(error);
       }
@@ -1119,6 +1130,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (tags !== undefined) body.tags = tags;
 
         const result = await storage.updateMemory(memory_id, body);
+        noteWrite({ memory_id });
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -1534,7 +1546,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           tags: [`priority-${priority}`, `status-${status}`],
         });
         resetDebt();
-        return wrapResult(annotateMergeSuggestion(result));
+        return wrapResult(annotateMergeSuggestion(noteWrite(result)));
       } catch (error) {
         return wrapError(error);
       }
@@ -1691,6 +1703,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         }
 
         const result = await storage.updateMemory(task_id, body);
+        noteWrite({ memory_id: task_id });
         return wrapResult(result);
       } catch (error) {
         return wrapError(error);
@@ -1747,7 +1760,7 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
           tags: ['correction'],
         });
         resetDebt();
-        return wrapResult(annotateMergeSuggestion(result));
+        return wrapResult(annotateMergeSuggestion(noteWrite(result)));
       } catch (error) {
         return wrapError(error);
       }

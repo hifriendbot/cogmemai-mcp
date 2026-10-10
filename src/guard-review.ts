@@ -15,6 +15,7 @@ import { execSync } from 'child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'path';
 import { FLAG_DIR } from './config.js';
+import { recentWriteIds } from './recent-writes.js';
 import { formatIntentNotes, type IntentCheckResult, type IntentLogEntry } from './guard.js';
 
 const GIT_TIMEOUT = 8000;
@@ -358,7 +359,7 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
   if (!opt.apiKey || files.length === 0) return [];
   const project = basename(root);
   const message = `Working in the ${project} repository, editing these files: ${files.slice(0, 8).join(', ')}. What known rules, gotchas, or past incidents apply to this code?`;
-  let data: { memories?: Array<{ content?: string }> } = {};
+  let data: { memories?: Array<{ id?: number | string; content?: string }> } = {};
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), opt.timeoutMs);
   try {
@@ -376,7 +377,9 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
     clearTimeout(t);
   }
 
-  return pickLandmines(data.memories || [], files);
+  // A memory this machine saved or updated in the last few hours is not a
+  // forgotten rule; it is something just written, often about this very edit.
+  return pickLandmines(data.memories || [], files, recentWriteIds());
 }
 
 /**
@@ -392,7 +395,7 @@ async function memoryLandmines(root: string, files: string[], opt: ReviewOptions
  * edit. A reviewer that adds reading without adding signal is noise, and
  * the person reading it has plenty to read already.
  */
-export function pickLandmines(memories: Array<{ content?: string }>, files: string[]): string[] {
+export function pickLandmines(memories: Array<{ id?: number | string; content?: string }>, files: string[], justWritten: Set<number> = new Set()): string[] {
   const anchors = new Set<string>();
   const fullNames = new Set<string>();
   for (const f of files.slice(0, 12)) {
@@ -423,6 +426,7 @@ export function pickLandmines(memories: Array<{ content?: string }>, files: stri
   for (const mem of memories.slice(0, 6)) {
     const content = mem && typeof mem.content === 'string' ? mem.content : '';
     if (!content) continue;
+    if (justWritten.size > 0 && mem.id !== undefined && justWritten.has(Number(mem.id))) continue;
     const flat = content.replace(/\s+/g, ' ').replace(/[*_`#]+/g, '').trim();
     for (const sentence of flat.split(/(?<=[.!;])\s+/)) {
       let s = sentence.trim();
