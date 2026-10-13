@@ -1,22 +1,26 @@
 <p align="center">
-  <img src="assets/hero.png" alt="CogmemAi — Cognitive Memory for Any Ai System" width="800">
+  <img src="assets/hero.png" alt="CogmemAi: Safe, Persistent Memory for Any Ai System" width="800">
 </p>
 
 [![npm version](https://img.shields.io/npm/v/cogmemai-mcp)](https://www.npmjs.com/package/cogmemai-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Quantum Safe](https://img.shields.io/badge/🛡%EF%B8%8F_Quantum-Safe-02ffba?style=flat&labelColor=1a1a2e)](https://hifriendbot.com/developer/)
 
-# CogmemAi: A Thinking, Live Memory for Everything Ai
+# CogmemAi: The Safe, Persistent Memory That Keeps Ai in Line
 
-**It remembers what matters, enforces the rules you set before anything happens, and checks what your Ai did against what you asked. For assistants, agents, robots, vehicles and code.**
+**It remembers what matters, stops any action that breaks the rules you set before it happens, and checks what your Ai did against what you asked. For assistants, agents, robots, vehicles and code.**
 
 <p align="center">
-  <img src="assets/demo.svg" alt="CogmemAi demo — your Ai assistant remembers your project across sessions" width="800">
+  <img src="assets/demo.svg" alt="CogmemAi demo: your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-CogmemAi is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams — and captures knowledge autonomously, even when your Ai forgets to save. **95.10% accuracy on LongMemEval — top published score on the field's hardest long-term memory benchmark.** 91% on LoCoMo, above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines — your knowledge stays. Not just one score on a test — the most complete Ai memory system available.
+Every rogue-Ai story is the same story: an Ai acted, and nothing stood between the decision and the damage. CogmemAi is the part that stands there. It is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams, captures knowledge autonomously even when your Ai forgets to save, enforces the rules you save before an action happens, and reviews finished work against your intent. **95.10% accuracy on LongMemEval, the top published score on the field's hardest long-term memory benchmark.** 91% on LoCoMo, above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines: your knowledge stays, and so do your rules. Not just one score on a test: the most complete, and the safest, Ai memory system available.
 
 ## What's New in v3
+
+### The Safe Memory That Keeps Ai in Line (v3.32.3)
+
+No code change. The package now says plainly what Guard and Review are for: the Ai you run should never be the one in the rogue-Ai headlines. Rules you save are enforced before an action happens, whether that action is a shell command, a message, a purchase or a change, and finished work is reviewed against what you asked. See [Guard](#guard), [Rule Packs](#rule-packs) and [Intent](#intent).
 
 ### A Character Budget for Recall (v3.32.0)
 
