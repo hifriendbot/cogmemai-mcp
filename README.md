@@ -151,6 +151,7 @@ CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162
 
 - **Precision reranking**: every recall runs a second-pass reranker that re-scores candidates for precision, balanced with the initial ranking signal to surface the most relevant memory first
 - **Self-improving recall**: memories that consistently help you rank higher over time; memories you never use fade naturally. Your recall quality improves automatically with every session
+- **Trust-weighted recall**: facts marked verified outrank unverified ones, and a saved correction retires the memory it replaces, so a corrected belief never competes with the original
 - **Auto-linking knowledge graph**: related memories are automatically connected when you save them. Your knowledge builds into a web of relationships, not a flat list
 - **Contradiction detection**: when recalled memories conflict with each other, CogmemAi flags the contradiction so you catch stale or outdated information before it causes problems
 - **Context-aware ranking**: tell CogmemAi what you're doing (debugging, planning, reviewing) and it boosts the right types of memories. Debugging? Bug reports and patterns surface first. Planning? Architecture decisions lead
