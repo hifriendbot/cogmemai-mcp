@@ -420,6 +420,12 @@ Automatic setup:
 npx cogmemai-mcp setup
 ```
 
+**See your memory: AI Total Recall.** A free Claude Code mod that shows what the Ai recalled, learned and is bound by, live, in a pane beside your work, with zero-token memory search and readable cards in place of raw JSON. One line inside Claude Code:
+```
+/plugin install aitotalrecall --marketplace hifriendbot/aitotalrecall
+```
+Site and demo: https://aitotalrecall.com. Source: https://github.com/hifriendbot/aitotalrecall.
+
 ### Cursor
 
 Add to `~/.cursor/mcp.json`:

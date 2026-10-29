@@ -440,6 +440,7 @@ export async function runSetup(providedKey?: string): Promise<void> {
     log('');
     log(`  ${BOLD}Upgrade anytime:${RESET} Run ${CYAN}npx cogmemai-mcp setup${RESET} and choose Cloud or Hybrid.`);
     log(`  ${DIM}Free cloud tier: https://hifriendbot.com/developer/${RESET}`);
+    logTotalRecallHint();
     log('');
     return;
   }
@@ -589,7 +590,19 @@ export async function runSetup(providedKey?: string): Promise<void> {
   log('');
   log(`  ${DIM}Dashboard: https://hifriendbot.com/developer/${RESET}`);
   log(`  ${DIM}Docs: https://hifriendbot.com/developer/#docs${RESET}`);
+  logTotalRecallHint();
   log('');
+}
+
+/**
+ * Points a fresh Claude Code setup at AI Total Recall, the free mod that shows
+ * what the Ai recalled, learned and is bound by in a pane beside the work.
+ */
+function logTotalRecallHint(): void {
+  log('');
+  log(`  ${BOLD}See your memory:${RESET} inside Claude Code, run`);
+  log(`  ${CYAN}/plugin install aitotalrecall --marketplace hifriendbot/aitotalrecall${RESET}`);
+  log(`  ${DIM}AI Total Recall is a free pane that shows what the Ai recalled, learned and is bound by. https://aitotalrecall.com${RESET}`);
 }
 
 // ── Verify Command ────────────────────────────────────────────
