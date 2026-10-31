@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
-import { measure, formatMetrics, parseVoiceReply, drift, docxText, zipEntry, htmlText, excerpts, profileRuleContent, voiceIntent, renderCheck } from '../build/voice.js';
+import { measure, formatMetrics, parseVoiceReply, drift, docxText, zipEntry, htmlText, excerpts, profileRuleContent, voiceIntent, renderCheck, pdfText } from '../build/voice.js';
 
 const PLAIN = `I built the first version in a weekend. It was ugly, but it worked, and that was the point.
 
@@ -159,6 +159,34 @@ test('docxText reads paragraphs out of a .docx with no dependency', () => {
   const text = docxText(buf);
   assert.equal(text, 'First paragraph here & more.\n\nSecond one, with a question?');
   assert.throws(() => docxText(Buffer.from('not a zip')), /not a \.docx/);
+});
+
+/** A minimal one-page PDF with a standard font: two lines 14 points apart, then a line 34 points lower. */
+function pdfFixture() {
+  const content = 'BT /F1 12 Tf 72 700 Td (First line of the first para-) Tj 0 -14 Td (graph continues here.) Tj 0 -34 Td (A new paragraph starts lower down.) Tj ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((o, i) => {
+    offsets.push(body.length);
+    body += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
+}
+
+test('pdfText rebuilds lines, joins a hyphen at a line end and breaks paragraphs on a tall gap', async () => {
+  const text = await pdfText(pdfFixture(), 'fixture.pdf');
+  assert.equal(text, 'First line of the first paragraph continues here.\n\nA new paragraph starts lower down.');
+  await assert.rejects(pdfText(Buffer.from('%PDF-1.4 not really'), 'bad.pdf'));
 });
 
 test('htmlText keeps the words and the paragraph breaks', () => {

@@ -5,7 +5,7 @@
  *   cogmemai-mcp voice check <file|-> [--min 80] [--project] [--path DIR]
  *   cogmemai-mcp voice show [--project] [--path DIR]
  *
- * learn reads writing the person wrote themselves (.txt, .md, .html, .docx), measures it on this
+ * learn reads writing the person wrote themselves (.txt, .md, .html, .docx, .pdf), measures it on this
  * machine (sentence rhythm, paragraphing, openers, punctuation habits, contractions, point of view,
  * vocabulary, signature words, formatting), sends the measurements and short excerpts to the MSGR
  * gateway once, and stores the result as rule memories: one voice_profile rule and eight to twelve
@@ -34,15 +34,20 @@ import { FLAG_DIR, VERSION } from './config.js';
 
 const MAX_SAMPLE_BYTES = 2_000_000;
 
-/** Read a writing sample as plain text. Supported: .txt, .md, .markdown, .html, .htm, .docx, and any UTF-8 text file. */
-export function extractText(path: string): string {
+const MAX_PDF_BYTES = 25_000_000;
+
+/** Read a writing sample as plain text. Supported: .txt, .md, .markdown, .html, .htm, .docx, .pdf, and any UTF-8 text file. */
+export async function extractText(path: string): Promise<string> {
   const ext = extname(path).toLowerCase();
   const st = statSync(path);
+  if (ext === '.pdf') {
+    if (st.size > MAX_PDF_BYTES) throw new Error(`${basename(path)} is larger than 25 MB; export the pages you want measured`);
+    return pdfText(readFileSync(path), basename(path));
+  }
   if (st.size > MAX_SAMPLE_BYTES) throw new Error(`${basename(path)} is larger than 2 MB; split it or export the part you want measured`);
   const buf = readFileSync(path);
   if (ext === '.docx') return docxText(buf, basename(path));
-  if (ext === '.pdf') throw new Error(`${basename(path)}: PDF is not supported yet; export it as .docx or .txt first`);
-  if (ext === '.doc' || ext === '.rtf' || ext === '.odt') throw new Error(`${basename(path)}: save it as .docx or .txt first`);
+  if (ext === '.doc' || ext === '.rtf' || ext === '.odt') throw new Error(`${basename(path)}: save it as .docx, .pdf or .txt first`);
   if (looksBinary(buf)) throw new Error(`${basename(path)} is not a text file`);
   const text = buf.toString('utf-8').replace(/^﻿/, '');
   if (ext === '.html' || ext === '.htm') return htmlText(text);
@@ -133,6 +138,74 @@ export function docxText(buf: Buffer, label = 'document'): string {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/**
+ * Text from a PDF through pdf.js (loaded only when a PDF is read). Lines are rebuilt from the
+ * glyph positions; a paragraph break is a vertical gap well above the page's usual line spacing,
+ * or a line that starts indented. Hyphens at line ends are joined. Scanned PDFs with no text
+ * layer come back empty and are reported as such.
+ */
+export async function pdfText(buf: Buffer, label = 'document'): Promise<string> {
+  let pdfjs: typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+  try {
+    pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  } catch (e) {
+    throw new Error(`${label}: the PDF reader (pdfjs-dist) is not installed: ${(e as Error).message}`);
+  }
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+  const pages: string[] = [];
+  try {
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      type Line = { x: number; y: number; parts: string[] };
+      const lines: Line[] = [];
+      let cur: Line | null = null;
+      for (const item of content.items) {
+        if (!('str' in item)) continue;
+        const x = item.transform[4];
+        const y = item.transform[5];
+        if (!cur || Math.abs(y - cur.y) > 2) {
+          cur = { x, y, parts: [] };
+          lines.push(cur);
+        }
+        if (item.str) cur.parts.push(item.str);
+        if (item.hasEOL) cur = null;
+      }
+      const texts = lines.map((l) => ({ x: l.x, y: l.y, text: l.parts.join(' ').replace(/\s+/g, ' ').trim() })).filter((l) => l.text);
+      if (!texts.length) continue;
+      const gaps: number[] = [];
+      for (let i = 1; i < texts.length; i++) {
+        const g = Math.abs(texts[i - 1].y - texts[i].y);
+        if (g > 0.5) gaps.push(g);
+      }
+      const sortedGaps = [...gaps].sort((a, b) => a - b);
+      // Lower median: the usual line spacing, even on a page with only a couple of lines.
+      const lineGap = Math.max(4, sortedGaps.length ? sortedGaps[Math.floor((sortedGaps.length - 1) / 2)] : 12);
+      const xs = texts.map((l) => Math.round(l.x)).sort((a, b) => a - b);
+      const leftEdge = xs[Math.floor(xs.length * 0.25)];
+      let out = '';
+      for (let i = 0; i < texts.length; i++) {
+        const l = texts[i];
+        if (i === 0) {
+          out = l.text;
+          continue;
+        }
+        const gap = Math.abs(texts[i - 1].y - l.y);
+        const newParagraph = gap > lineGap * 1.6 || l.x > leftEdge + 8;
+        if (newParagraph) out += '\n\n' + l.text;
+        else if (/[A-Za-z]-$/.test(out) && /^[a-z]/.test(l.text)) out = out.slice(0, -1) + l.text;
+        else out += ' ' + l.text;
+      }
+      pages.push(out);
+    }
+  } finally {
+    await doc.destroy();
+  }
+  const text = pages.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) throw new Error(`${label}: no text layer in this PDF (a scanned image needs OCR first)`);
+  return text;
 }
 
 // ── Measuring ─────────────────────────────────────────────────
@@ -621,7 +694,7 @@ export async function learn(opt: LearnOptions): Promise<LearnResult> {
   for (const f of opt.files) {
     const path = resolve(opt.cwd, f);
     if (!existsSync(path)) throw new Error(`${f}: no such file`);
-    const text = extractText(path);
+    const text = await extractText(path);
     const n = words(text).length;
     log(`  ${basename(path)}: ${fmtN(n)} words`);
     if (n >= 40) texts.push({ name: basename(path), text });
@@ -873,7 +946,7 @@ function positional(args: string[]): string[] {
   return out;
 }
 
-function readDraft(arg: string | undefined, cwd: string): string {
+async function readDraft(arg: string | undefined, cwd: string): Promise<string> {
   if (!arg || arg === '-') {
     try {
       return readFileSync(0, 'utf-8');
@@ -914,7 +987,7 @@ export async function runVoiceCli(args: string[], resolveKey: () => string): Pro
     console.log('  cogmemai-mcp voice check <file|-> [--min 80] [--project] [--path DIR]');
     console.log('  cogmemai-mcp voice show [--project] [--path DIR]');
     console.log('');
-    console.log('learn reads writing the person wrote themselves (.txt, .md, .html, .docx), measures it here, and stores a voice');
+    console.log('learn reads writing the person wrote themselves (.txt, .md, .html, .docx, .pdf), measures it here, and stores a voice');
     console.log('profile plus 8 to 12 rules as rule memories, so every connected Ai writes in that voice. Global by default (the');
     console.log('person); --project makes it a brand voice for this project only. check measures a draft against the profile and');
     console.log('has the review judge it against the voice document; it passes at the threshold with no violations.');
@@ -951,7 +1024,7 @@ export async function runVoiceCli(args: string[], resolveKey: () => string): Pro
 
   if (sub === 'check') {
     const files = positional(args);
-    const text = readDraft(files[0], cwd);
+    const text = await readDraft(files[0], cwd);
     if (words(text).length < 20) {
       console.error('The draft needs at least 20 words. Pass a file, or pipe text in and use - as the file name.');
       process.exit(1);
