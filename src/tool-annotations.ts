@@ -55,6 +55,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_intent:             ro('Read project intent'),
   guard_check:            ro('Guard: may I do this?', false),
   review_work:            ro('Review work against intent', false),
+  voice_check:            ro('Voice: does this draft sound like the person?', false),
   save_correction:        add('Save a correction'),
   // Tasks and reminders
   save_task:              add('Create task'),

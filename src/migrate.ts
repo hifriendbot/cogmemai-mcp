@@ -426,7 +426,7 @@ export function formatInventory(inv: Inventory): string {
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
-async function gatewayChat(apiKey: string, projectId: string, model: string, system: string, user: string, maxTokens = 2000): Promise<string> {
+export async function gatewayChat(apiKey: string, projectId: string, model: string, system: string, user: string, maxTokens = 2000): Promise<string> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 120_000);
   try {

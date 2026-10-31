@@ -17,6 +17,7 @@ import { FLAG_DIR, VERSION, SESSION_EXPIRY_SECONDS } from './config.js';
 import { latestVersion } from './index.js';
 import { applyRecallBudget, resolveRecallBudget, trimRelatedPreview } from './recall-budget.js';
 import { recordWrite } from './recent-writes.js';
+import { checkVoice } from './voice.js';
 
 const MEMORY_TYPES = [
   'identity',
@@ -591,6 +592,28 @@ export function registerTools(server: McpServer, storage: StorageBackend): void 
         if (result && result.judged === false && result.reason === 'no_intent') {
           return wrapResult({ ...result, hint: 'No intent document for this project. Record one with set_intent, or pass intent inline.' }, true);
         }
+        return wrapResult(result, true);
+      } catch (error) {
+        return wrapError(error);
+      }
+    }
+  );
+
+  // ─── 1c-4. voice_check: does this draft sound like the person? (v3.33.0) ──
+
+  server.tool(
+    'voice_check',
+    'Check a draft against the person\'s own writing voice. Call it before handing back any draft longer than a paragraph when the rules include a voice_profile (learned with `cogmemai-mcp voice learn` from writing the person wrote themselves). Measures the draft (sentence rhythm, punctuation habits, contractions, person, vocabulary, formatting) against their profile and has the review judge it against the voice document. Returns a drift score with findings, the review verdict, and passed. Fix what is flagged, then check again. Pass scope "project" for a brand voice learned with --project.',
+    {
+      text: z.string().min(20).max(30000).describe('The draft to check, as plain text or Markdown'),
+      scope: z.enum(['global', 'project']).optional().describe('global = the person\'s own voice (default); project = the brand voice learned for this project'),
+      min: z.number().int().min(0).max(100).optional().describe('Pass threshold for the drift score and the review coverage (default 80)'),
+      project_id: z.string().max(200).optional().describe('Project identifier override (auto-detected if omitted)'),
+    },
+    async ({ text, scope, min, project_id }) => {
+      try {
+        const projectId = project_id || detectProjectId();
+        const result = await checkVoice(storage, text, { scope: scope || 'global', projectId, min, useCache: !remoteMode });
         return wrapResult(result, true);
       } catch (error) {
         return wrapError(error);

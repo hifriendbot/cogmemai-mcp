@@ -15,6 +15,7 @@ import { runSetup, runVerify, showHelp, runHookPrecompact, runHookContextReload,
 import { runHookPreToolUse, runHookGuardReview, runGuardCli, resolveKey } from './guard-hooks.js';
 import { runRulesCli } from './packs.js';
 import { runMigrateCli } from './migrate.js';
+import { runVoiceCli } from './voice.js';
 
 // Shared state: latest version from npm (set by checkForUpdate, read by tools)
 export let latestVersion: string | null = null;
@@ -67,6 +68,11 @@ if (subcommand === 'setup') {
 } else if (subcommand === 'migrate') {
   runMigrateCli(process.argv.slice(3), resolveKey).catch((err) => {
     console.error('Migrate failed:', err.message || err);
+    process.exit(1);
+  });
+} else if (subcommand === 'voice') {
+  runVoiceCli(process.argv.slice(3), resolveKey).catch((err) => {
+    console.error('Voice failed:', err.message || err);
     process.exit(1);
   });
 } else if (subcommand === 'verify') {
@@ -339,6 +345,9 @@ Rules and the project intent are enforced, not only recalled. In a coding tool t
 - **review_work** — call it AFTER finishing a task that is not a code change (a reply drafted, a document written, a plan made, a conversation handled). Pass what was done; it is reviewed against the project intent (or an intent you pass inline) and reports violations and gaps in the user's own words. Fix violations before reporting the work as done.
 Both fail open: an error never blocks you, it is reported as judged: false.
 
+## Voice (every Ai writes like this person)
+If the rules include a voice_profile rule, this person has learned their own writing voice into CogmemAi. Write every draft for them (messages, posts, documents, replies) in that voice and obey the voice_* rules. Before handing back a draft longer than a paragraph, call **voice_check** with the text: it measures the draft against the person's own writing (sentence rhythm, punctuation habits, contractions, person, vocabulary) and has the review judge it against the voice document. Fix what it flags, then check again. No profile yet? Suggest "npx cogmemai-mcp voice learn <files...>" on writing they wrote themselves.
+
 ## Tool Selection Guide
 | Goal | Tool |
 |------|------|
@@ -348,6 +357,7 @@ Both fail open: an error never blocks you, it is reported as judged: false.
 | Save an absolute rule | save_rule |
 | Check an action against the rules before doing it | guard_check |
 | Review finished work against the intent | review_work |
+| Check a draft against the person's own writing voice | voice_check |
 | List/manage rules | list_rules / delete_rule |
 | Find a specific memory | recall_memories |
 | Browse/filter memories | list_memories |

@@ -2464,6 +2464,11 @@ export function showHelp(): void {
   log(`    cogmemai-mcp migrate assess --target aws|azure|gcp   Inventory the repo, write the migration scope as intent, plan + risks, install packs`);
   log(`    cogmemai-mcp migrate gate "<phase>"   Review a migration phase against the scope (passes at coverage 80, no violations)`);
   log('');
+  log(`  ${BOLD}Voice (v3.33+):${RESET}`);
+  log(`    cogmemai-mcp voice learn <files...> [--name "..."] [--project] [--dry-run]   Learn your writing voice from your own writing; every Ai then writes like you`);
+  log(`    cogmemai-mcp voice check <file|->  [--min 80]   Measure a draft against your voice and have the review judge it`);
+  log(`    cogmemai-mcp voice show          Print the voice profile, its rules and the measurements`);
+  log('');
   log(`  ${BOLD}Get started:${RESET}`);
   log(`    1. Get a free API key at ${CYAN}https://hifriendbot.com/developer/${RESET}`);
   log(`    2. Run ${CYAN}npx cogmemai-mcp setup${RESET}`);

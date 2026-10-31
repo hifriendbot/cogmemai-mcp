@@ -283,6 +283,7 @@ Save a memory IMMEDIATELY after each file edit, bug fix, or user decision. Sessi
 | Load context at session start | get_project_context |
 | Save a fact or decision | save_memory |
 | Save an absolute rule | save_rule |
+| Check a draft against the person's own writing voice | voice_check |
 | Find a specific memory | recall_memories |
 | Browse/filter memories | list_memories |
 | Learn from a conversation | extract_memories |

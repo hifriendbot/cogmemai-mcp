@@ -18,6 +18,10 @@ Every rogue-Ai story is the same story: an Ai acted, and nothing stood between t
 
 ## What's New in v3
 
+### Voice: Every Ai Writes Like You (v3.33.0)
+
+`npx cogmemai-mcp voice learn notes.md emails.txt paper.docx` reads writing you wrote yourself, measures it on your machine (sentence rhythm and how much it varies, paragraph length, how sentences open and close, every punctuation mark per thousand words, contractions, first and second person, vocabulary level, signature words, bullets and headings), sends the measurements and short excerpts to the MSGR gateway once, and stores what comes back as rule memories: one `voice_profile` rule that describes the voice in checkable terms and eight to twelve `voice_*` rules ("NEVER use a semicolon; the writer used none in 4,200 words", "ALWAYS open about one sentence in ten with a short transition"). Rules load into every session of every Ai connected to your memory, so Claude Code, Cursor, claude.ai, a companion or a support assistant all write in your voice from the next session on, with nothing else to configure. Global by default; `--project` learns a brand voice for one project instead. Then `cogmemai-mcp voice check draft.md` (or pipe text in with `-`) measures a draft the same way, reports where it drifts from your writing (marks you never use, sentences twice your length, no contractions where you contract, none of your frequent words), and has the review judge it against the voice document; it passes at the threshold with no violations, so it works as a gate before anything is sent or published. The `voice_check` tool does the same from inside the conversation, and the instructions tell an Ai to call it before handing back any draft longer than a paragraph. `voice show` prints the profile, its rules and the measurements; `--dry-run` shows exactly what would be sent. Reads `.txt`, `.md`, `.html` and `.docx` with no added dependency. This is for writing in your own voice on your own work; it is not a detector bypass and is never tested against one.
+
 ### Docs: One Answer on Keys in Local Mode (v3.32.4)
 
 The README said in one place that local mode needs no key and in three others that it does. It does: a free key registers the install, and in local mode nothing you store leaves your machine. The environment table now says so, and the whole README reads without em dashes. No code change.
@@ -172,7 +176,7 @@ CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162
 - **Session reminders**: nudges that surface at the start of your next session
 - **Mandatory rules**: define absolute requirements ("NEVER do X", "ALWAYS do Y") that surface in every session, bypassing all scoring and decay
 - **Autonomous memory**: captures work even when your Ai skips saves
-- **41 tools**: the most complete memory toolkit for any Ai system, including guard and review calls any Ai can make
+- **42 tools**: the most complete memory toolkit for any Ai system, including guard, review and voice calls any Ai can make
 
 ## Quick Start
 
@@ -261,6 +265,9 @@ npx cogmemai-mcp guard shell-remove    # Undo shell-install
 npx cogmemai-mcp rules list            # Rule packs you can install (v3.30+)
 npx cogmemai-mcp rules show devsecops  # Read a pack before installing it
 npx cogmemai-mcp rules install devsecops [--global] [--intent] [--dry-run]
+npx cogmemai-mcp voice learn <files...> [--name "..."] [--project] [--dry-run]   # Learn your writing voice (v3.33+)
+npx cogmemai-mcp voice check <file|->  [--min 80] [--project]   # Does this draft sound like you?
+npx cogmemai-mcp voice show            # The profile, its rules and the measurements
 ```
 
 ## Guard
@@ -308,6 +315,18 @@ Five packs ship today: `devsecops` (40 rules), `aws` (20), `azure` (18), `gcp` (
 ## Migrate
 
 `cogmemai-mcp migrate assess --target aws|azure|gcp [--path DIR] [--out FILE] [--model ID] [--force] [--no-rules] [--dry-run]` inventories the repository, writes the migration scope as the project intent, stores the plan, risks and cost drivers as memories, writes `MIGRATION.md`, and installs the `migrate` and target cloud packs. `cogmemai-mcp migrate gate "<phase>" [--notes "..."] [--since REF]` reviews a phase against the scope and passes at coverage 80 or more with no violations; `migrate status` lists the assessment, gates and risks on record. The inventory sends names and counts only (dependency names, environment variable names, hostnames, file names of secret-looking files), never file contents or values. The assessment and the gate are judged calls and run on the paid tiers; the inventory and the packs work on every tier.
+
+## Voice
+
+Most writing an Ai hands back sounds like the model, not like the person who asked. CogmemAi Voice (v3.33.0) fixes that at the memory layer, where it holds for every tool at once.
+
+**Learn it.** `cogmemai-mcp voice learn <files...>` takes writing you wrote yourself: notes, emails, posts, papers, in `.txt`, `.md`, `.html` or `.docx` (no PDF yet; export it first). It needs at least 300 words and does much better with 1,500 or more. Everything is measured on your machine: sentence length and its spread, short and long sentence shares, paragraph length, the first word of every sentence and how often a transition opens one, every punctuation mark per thousand words (semicolons, colons, em and en dashes, parentheses, exclamation and question marks, quotes, ellipses), contractions, first and second person, numbers, adverbs, capitals, average word length and long-word share, type-token ratio, signature words that are not function words, and bullets, headings and bold. The measurements and a few short excerpts go to the MSGR gateway once (`--dry-run` prints exactly what would be sent), and the reply is stored as rule memories: a `voice_profile` rule describing the voice in checkable terms, eight to twelve `voice_*` rules, and a `voice_metrics` memory with the numbers. Learning again replaces the earlier set (moved to the trash, not deleted). Global by default, because a person's voice applies everywhere; `--project` learns a brand voice for one project, so a client site and your own writing do not mix. `--name "Scott"` puts the person's name in the rules.
+
+**Use it.** Nothing more to do. Rules load first in every session of every connected Ai, and the profile rule tells the Ai to write in that voice and to check longer drafts with `voice_check` before handing them back.
+
+**Check it.** `cogmemai-mcp voice check draft.md` (or `-` for stdin) measures the draft the same way and reports drift in plain words: "uses 5 semicolons; the writer uses none", "sentences average 26 words; the writer averages 10", "no contractions; the writer uses about 60 per 1,000 words", "none of the writer's frequent words appear". Then the review judges the draft against the voice document (the description plus the rules, passed inline, so no project intent is needed) and returns coverage and violations. A draft passes at the threshold (`--min`, default 80) on both with no violations; the exit code is 1 when it fails, so it works in a script or a pre-send gate. The drift check runs on every tier; the judged review runs on the paid tiers. The `voice_check` tool is the same check from inside a conversation.
+
+**What it is not.** It is not a detector bypass and is never measured against one. It is for writing in your own voice, or your brand's, on your own work, and the output is still a draft you read before you send it.
 
 ## Intent
 
@@ -489,7 +508,7 @@ Get your free API key at [hifriendbot.com/developer](https://hifriendbot.com/dev
 
 ## Tools
 
-CogmemAi provides 41 tools that your Ai assistant uses automatically:
+CogmemAi provides 42 tools that your Ai assistant uses automatically:
 
 | Tool | Description |
 |------|-------------|
@@ -531,6 +550,7 @@ CogmemAi provides 41 tools that your Ai assistant uses automatically:
 | `set_intent` | Create or replace the project's Intent document (versioned; invariants are enforced by the guard) |
 | `guard_check` | Ask before acting: allow, ask or deny for any proposed action, against remembered rules and the intent |
 | `review_work` | Review finished work (description, output, message or transcript) against the intent |
+| `voice_check` | Check a draft against the person's own writing voice: drift findings, review verdict, passed |
 | `extract_principles` | Trigger Wisdom Engine to detect factual patterns across memory clusters |
 
 ## SDKs
