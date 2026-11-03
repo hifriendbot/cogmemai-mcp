@@ -14,7 +14,7 @@
   <img src="assets/demo.svg" alt="CogmemAi demo: your Ai assistant remembers your project across sessions" width="800">
 </p>
 
-Every rogue-Ai story is the same story: an Ai acted, and nothing stood between the decision and the damage. CogmemAi is the part that stands there. It is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams, captures knowledge autonomously even when your Ai forgets to save, enforces the rules you save before an action happens, and reviews finished work against your intent. **95.10% accuracy on LongMemEval, the top published score on the field's hardest long-term memory benchmark.** 91% on LoCoMo, above human performance (87.9%). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines: your knowledge stays, and so do your rules. Not just one score on a test: the most complete, and the safest, Ai memory system available.
+Every rogue-Ai story is the same story: an Ai acted, and nothing stood between the decision and the damage. CogmemAi is the part that stands there. It is a portable memory layer that gives any Ai system persistent recall across sessions, devices, users, and teams, captures knowledge autonomously even when your Ai forgets to save, enforces the rules you save before an action happens, and reviews finished work against your intent. **The top published score on LongMemEval**, the field's hardest long-term memory benchmark ([the result](https://hifriendbot.com/tech/)). Quantum-safe encryption. Works with Claude Code, Cursor, Windsurf, Cline, Continue, and any MCP-compatible tool. Switch editors, switch models, switch machines: your knowledge stays, and so do your rules. Not just one score on a test: the most complete, and the safest, Ai memory system available.
 
 ## What's New in v3
 
@@ -153,7 +153,7 @@ CogmemAi now gets smarter every time you use it. The Intelligence Engine is a se
 - **Confidence tracking**: each skill has a confidence score that rises when it works and drops when it doesn't. Low-confidence skills are automatically retired
 - **Self-evaluation**: skills periodically review themselves against new evidence and adapt, strengthen, or retire as your practices evolve
 
-### Intelligence Engine: 95.10% on LongMemEval, 91% on LoCoMo
+### Intelligence Engine: Top Published Score on LongMemEval
 
 CogmemAi scores **95.10% accuracy on [LongMemEval](https://github.com/xiaowu0162/LongMemEval)**, the top published score on the field's hardest long-term memory benchmark, and **91% accuracy on [LoCoMo](https://github.com/snap-research/locomo)** with a 100% retrieval hit rate, above human performance (87.9%). Two benchmarks, two #1-tier scores. CogmemAi finds the right memories when you need them.
 
